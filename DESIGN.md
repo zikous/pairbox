@@ -1,6 +1,8 @@
 # pairbox — design
 
-pairbox is a self-hosted collaborative coding pad. The host shares a link. Everyone in the room edits the same code in the browser and works in the same terminal, which runs in an isolated sandbox.
+pairbox is a self-hosted collaborative coding pad. The host shares a link. Everyone in the room edits the same code in the browser and works in the same terminal, which runs on an isolated worker.
+
+It is built from a few small services. They only talk to each other over HTTP and WebSockets, so each one can run anywhere: all on one machine with `docker compose up`, or spread across machines and real VMs later.
 
 ## Scope
 
@@ -8,91 +10,88 @@ pairbox is a self-hosted collaborative coding pad. The host shares a link. Every
 
 - Real-time collaborative editing, with nothing for guests to install.
 - An editor in the browser good enough that nobody misses their IDE.
-- A shared, interactive terminal for each room that everyone can see and type into.
-- Self-hosting on one machine with one command.
+- A shared, interactive terminal for each room, on a real shell, that everyone can see and type into.
+- Self-hosting with one command (`docker compose up`).
+- Adding workers, on the same machine or others, when more rooms need to run at once.
 
 **Out of scope for now**
 
-- Accounts and multi-tenancy. A single host secret is enough for a self-hosted tool.
+- Accounts and multi-tenancy. A single host secret is enough for a self-hosted tool. Running pairbox as a public service would add these later, on top of the same architecture.
+- Multi-file projects. One file per room keeps the document model simple. Workers already use a workspace folder, so projects can come later.
 - Desktop editor plugins. All effort goes into the browser editor.
-- Multi-file projects. One file per room keeps the document model simple.
 - Reconnect handling. It can be added once the core works.
 
 ## Principles
 
 - **The core is pure.** Domain logic never touches the network, containers or disks, so it can be tested on its own.
-- **Infrastructure is replaceable.** The core declares what it needs through ports, and adapters provide it. Changing a technology means writing a new adapter.
-- **Dependencies point inward.** Adapters know about the core; the core never knows about adapters.
-- **Editing and execution are isolated from each other.** They use separate channels, so heavy terminal output never slows down typing.
+- **Infrastructure is replaceable.** Each service declares what it needs through ports, and adapters provide it. Changing a technology means writing a new adapter.
+- **Services don't know how they are hosted.** No service calls Docker. Docker is only how development and self-hosting run them; a worker could just as well be a real VM.
+- **Editing and execution are isolated from each other.** They use separate channels and separate services, so heavy terminal output never slows down typing.
 
-## System overview
+## Services
 
 ```mermaid
 flowchart LR
-    U[Participants<br/>browsers] <--> S[pairbox server]
-    S --> X[Sandbox runtime]
-    S --> P[(Storage)]
+    B[Browsers] --> WEB[web]
+    WEB --> API[api]
+    API --> DB[(database)]
+    API --> POOL[pool]
+    API <--> W[workers]
+    POOL --> W
 ```
 
-| Part | Role |
+| Service | Role |
 |---|---|
-| **Browser** | Editor, presence and terminal. Holds no authority. |
-| **Server** | The single source of truth. It holds every active room, relays changes between participants, and controls sandboxes. |
-| **Sandbox runtime** | Runs one isolated environment per active room. |
-| **Storage** | Keeps room documents so they survive restarts. |
+| **web** | Serves the browser app and forwards `/api` and `/ws` to the api. |
+| **api** | The single source of truth for rooms. Holds active rooms, syncs their documents between participants, relays each room's terminal to its worker, and stores rooms, workspaces and templates in the database. |
+| **pool** | Knows every worker and its state. Reserves a free worker for a room and releases it afterwards. Holds no room data. |
+| **worker** | One isolated machine (a VM, or a container standing in for one). Runs one room at a time: a real shell, the room's files in a workspace folder, and Run. Cleaned between rooms. |
+| **database** | Rooms, workspaces and templates. |
+
+Browsers only reach `web`. Workers are on a private network: the api and the pool can reach them, but nothing on them can reach the internet.
 
 ## Domain
 
 | Concept | Meaning | Rules |
 |---|---|---|
-| **Room** | A shared workspace reached by a link | Has one document, one language and one terminal. Exists until the host deletes it. |
+| **Room** | A shared workspace reached by a link | Has one workspace, one language and one terminal. Exists until the host deletes it. |
 | **Participant** | Someone connected to a room | Anonymous, identified by a display name. Everyone has the same permissions. |
-| **Document** | The code being edited | Concurrent edits always merge, with no locking. |
-| **Terminal** | A shell inside the room's sandbox | Shared by all participants. Created when a room becomes active, destroyed when it goes idle or is reset. |
-| **Run** | One execution of the document in the terminal | One at a time per room. Uses a copy of the code taken when Run is clicked. |
+| **Workspace** | The code being edited (one file for now) | Concurrent edits always merge, with no locking. Saved to the database. |
+| **Template** | A saved starting point for new rooms | A language plus starting code. Created by the host. |
+| **Worker** | An isolated machine that runs one room at a time | Free, reserved by exactly one room, or being cleaned. Nothing from one room is visible to the next. |
+| **Terminal** | The shell on the room's worker | Shared by all participants. Opened when a room becomes active, closed when it goes idle or is reset. |
+| **Run** | One execution of the workspace in the terminal | One at a time per room. Uses a copy of the code taken when Run is clicked. |
 
-## Layers
+## Workers and the pool
+
+A worker goes through these states:
 
 ```mermaid
-flowchart TB
-    subgraph Adapters
-        T[Transport]
-        SR[Sandbox]
-        ST[Storage]
-    end
-    subgraph Application
-        UC[Use cases]
-    end
-    subgraph Domain
-        D[Room, Participant, Document, Terminal, Run]
-    end
-    T --> UC
-    UC --> D
-    SR -. implements port .-> UC
-    ST -. implements port .-> UC
+stateDiagram-v2
+    [*] --> free: registers with the pool
+    free --> reserved: pool reserves it for a room
+    reserved --> cleaning: room released it
+    cleaning --> free: workspace wiped, processes killed
+    free --> gone: stops answering
+    reserved --> gone: stops answering
 ```
 
-| Layer | Contains |
-|---|---|
-| **Domain** | The concepts and rules above. |
-| **Application** | Use cases: create, join and delete a room; edit; run, stop and reset; send terminal input. It defines the ports it depends on: sandbox, storage and notifier. |
-| **Adapters** | The browser transport, the sandbox runtime and storage, each implementing a port. |
-
-## Client
-
-| Part | Shared | Purpose |
-|---|---|---|
-| **Editor** | Yes | Highlighting, autocomplete and remote cursors on the shared document and language |
-| **Presence** | Yes | Who is here, and where their cursors are |
-| **Terminal** | Yes | A shell between runs, live program I/O during runs, plus Run, Stop and Reset |
-| **Preferences** | No | Theme and keymap (vim, emacs), personal to each participant |
+- **Registration.** A worker announces itself to the pool when it starts (its address and the languages its image supports) and then sends heartbeats. Missing heartbeats mark it gone. The pool needs no list of workers and no database: its state can always be rebuilt from the workers.
+- **Reservation.** When a room becomes active, the api asks the pool for a free worker that supports the room's language. If none is free, the room says that no sandbox is available.
+- **Release and cleaning.** When everyone has left a room for a while, or someone presses Reset, the api releases the worker. The pool has it cleaned: every process of the previous room is killed and its workspace and home folder are wiped. Then it is free again.
+- **Images.** A worker image is a base system, language runtimes (Python and Node.js first) and the worker agent. Adding a language means building an image; no code changes.
 
 ## Communication
 
-| Channel | Carries | Why it is separate |
+| Channel | Between | Carries |
 |---|---|---|
-| **Collaboration** | Edits, cursors, presence | Merged by a CRDT, so it needs no ordering guarantees from the server |
-| **Session** | Terminal input and output, run, stop, reset, language change | Ordered streams that may be heavy and must never delay editing |
+| **Collaboration** (WebSocket) | browser and api | Edits, cursors and presence, merged by a CRDT |
+| **Session** (WebSocket) | browser and api | Terminal input and output, run, stop, reset, language changes |
+| **Pool** (HTTP) | api and pool | Reserve and release workers |
+| **Registration** (HTTP) | worker and pool | Register, heartbeat, clean |
+| **Terminal** (WebSocket) | api and worker | Write files, shell input and output, resize, run, stop |
+
+The api relays between a room's session and its worker's terminal. Browsers never talk to the pool or to workers.
 
 ## Flows
 
@@ -101,92 +100,116 @@ flowchart TB
 ```mermaid
 sequenceDiagram
     participant P as Participant
-    participant S as Server
-    participant X as Sandbox
-    P->>S: open room link
-    S->>S: load room if not in memory
-    S->>X: create sandbox if room has none
-    S-->>P: document, presence, terminal
+    participant A as api
+    participant L as pool
+    participant W as worker
+    P->>A: open room link
+    A->>A: load room and workspace if not active
+    A->>L: reserve a worker (if the room has none)
+    L-->>A: worker address
+    A->>W: open terminal, write workspace files
+    A-->>P: document, presence, terminal
 ```
 
 ### Run
 
 ```mermaid
 sequenceDiagram
-    participant A as Participant A
-    participant S as Server
-    participant X as Sandbox
-    participant B as Participant B
-    A->>S: run
-    S->>X: write code copy, start it in the shell
+    participant P as Participants
+    participant A as api
+    participant W as worker
+    P->>A: run
+    A->>W: write code copy, run it in the shell
     loop until the program exits or is stopped
-        X-->>S: output
-        S-->>A: output
-        S-->>B: output
-        B->>S: input
-        S->>X: input
+        W-->>A: output
+        A-->>P: output
+        P->>A: input
+        A->>W: input
     end
-    Note over S,X: terminal returns to the shell
+    Note over A,W: terminal returns to the shell
 ```
 
-**Stop** interrupts the program. **Reset** replaces the sandbox with a clean one.
+**Stop** interrupts the program. **Reset** releases the worker and reserves a clean one.
 
-## Sandbox
+## Isolation
 
-The sandbox is where untrusted code and commands run, so isolation comes before features.
+Workers run untrusted code and commands, so isolation comes before features.
 
 | Constraint | Policy | Reason |
 |---|---|---|
-| Network | None | No attacks on the host network or the internet |
-| Filesystem | Read-only, plus a scratch workspace | Programs can write files without changing the image |
-| Privileges | Non-root, no capabilities | Limits the damage if someone breaks out |
-| Resources | Capped CPU, memory, disk and processes | One room can't starve the host |
+| Machine | One room per worker, cleaned between rooms | Nothing leaks from one room to the next |
+| Network | Private network, no internet | No attacks on the internet or the host's network |
+| User | Room code runs as an unprivileged user | The worker agent itself can't be tampered with |
+| Filesystem | Read-only system, writable workspace and home | Programs can write files without changing the image |
+| Resources | Capped CPU, memory, disk and processes per worker | One room can't starve the others |
 | Output | Rate-limited | A runaway loop can't flood every browser |
-| Lifetime | Ends when the room is idle, and after a maximum age | Resources are given back |
-| Capacity | Global cap on active sandboxes, extra requests refused | The host stays predictable under load |
+| Lifetime | Released when the room is idle, and after a maximum age | Workers are given back |
 
-The sandbox state is never saved; only the document is. Languages are configured as an environment image plus a run command, so adding one needs no code change.
+In development the worker is a container with these limits. In production it can be a VM, with the same agent and the same API.
+
+## Storage
+
+| Table | Holds |
+|---|---|
+| **rooms** | id, name, language, creation time |
+| **workspaces** | the room's document (its CRDT state) and when it was last saved |
+| **templates** | id, name, language, starting code |
+
+Only active rooms are held in memory. Workspaces are saved shortly after each change and when a room goes idle, and loaded when someone opens the room. Worker state is never saved.
 
 ## Security
 
-- **Creating and deleting rooms** requires the host secret.
-- **Joining** requires only the link, so the room ID must be hard to guess.
-- **The server controls the sandbox runtime**, so the host machine must trust it. Use stronger isolation (a user-space kernel or microVMs) whenever the host supports it.
+- **Creating and deleting rooms and templates** requires the host secret.
+- **Joining** requires only the link, so room ids must be hard to guess.
+- **Nothing has access to the container runtime.** Isolation comes from the worker boundary, not from a service controlling Docker. On a real deployment, use VMs (or a user-space kernel) for workers.
+- **Services trust each other** through a shared internal secret and a private network. Only `web` is exposed.
 
 ## Deployment
 
-The server runs on the host next to a sandbox runtime. Guests reach it through an exposed port or a tunnel. Only active rooms are held in memory; the rest are loaded from storage when someone opens their link.
+`docker compose up` starts everything on one machine:
+
+| Container | Runs |
+|---|---|
+| web | The built browser app, plus forwarding to the api |
+| api | The api service |
+| pool | The pool service |
+| worker (×N) | The worker image, on the private network, with resource limits |
+| database | Postgres |
+
+To grow, start more workers, on this machine or others; they register with the pool themselves. Settings come from one `.env` file (see `.env.example`). Guests reach `web` through an exposed port or a tunnel.
 
 ## Proposed technologies
 
 These are suggestions. Each one sits behind an adapter.
 
-**TypeScript everywhere.** Using one language for the browser and the server keeps the project simple:
+**TypeScript everywhere.** One language for the browser and every service:
 
-- **One CRDT library.** Yjs is native JavaScript, so the browser and server run the same code instead of a port.
-- **Shared types.** Domain concepts and session messages are defined once, so the client and server can't drift apart.
-- **The hard parts don't depend on the language.** Sandbox isolation and terminal handling come down to Docker settings and terminal plumbing, and Node has mature libraries for both.
-- **Performance isn't a constraint.** A self-hosted pad with a few people per room doesn't need a systems language.
+- **One CRDT library.** Yjs is native JavaScript, so the browser and api run the same code.
+- **Shared types.** Requests, responses and messages are defined once, as schemas, so services can't drift apart.
+- **The hard parts don't depend on the language.** Isolation and terminals come down to machine settings and terminal plumbing, and Node has mature libraries for both.
 
 | Concern | Proposal | Alternatives |
 |---|---|---|
-| Language | TypeScript (strict), browser and server | Rust or Go on the server |
-| Server runtime | Node.js | Bun, Deno |
+| Language | TypeScript (strict), browser and services | Rust or Go for the worker |
+| Runtime | Node.js | Bun, Deno |
 | HTTP framework | Fastify, with OpenAPI docs from Zod schemas | Hono, Express |
 | CRDT | Yjs | Automerge, Loro |
-| Transport | WebSockets | WebTransport |
-| Sandbox | Docker | gVisor, Firecracker, nsjail |
-| Storage | SQLite | Postgres, files |
+| Shell in the worker | node-pty | A small Go agent |
+| Database | Postgres, with Drizzle for schema and migrations | SQLite, Kysely |
+| Workers in development | Docker containers | — |
+| Workers in production | VMs | Firecracker microVMs, gVisor containers |
 | Editor | CodeMirror 6 | Monaco |
 | Terminal | xterm.js | hterm |
 | Frontend | Svelte 5 + Vite | SolidJS, plain TypeScript |
 | UI components | shadcn-svelte (Bits UI + Tailwind) | Bits UI alone, plain CSS |
-| Packaging | Docker Compose | Single executable via Bun |
+| web container | nginx serving the built app | Caddy |
+| Packaging | Docker Compose | Kubernetes, later |
 
 ## Milestones
 
-1. **Shared editor.** Two browsers edit the same document.
-2. **Terminal.** A shared shell per room, Run, and all sandbox limits, for one language.
-3. **Usable.** Language picker, presence, Stop, Reset, host secret.
-4. **Persistent.** Rooms survive restarts and can be deleted.
-5. **Later.** Reconnects, read-only links, interviewer and candidate roles, chat, language-server features.
+1. **Shared editor.** Two browsers edit the same document. *Done.*
+2. **Usable rooms.** Language picker, presence, Stop, Reset, host secret, invite links. *Done, with a simulated terminal.*
+3. **Workers.** The worker agent with a real shell, its image (Python and Node.js), and the pool service. Replaces the simulated terminal.
+4. **One command.** Docker Compose for web, api, pool, workers and the database.
+5. **Persistent.** Rooms, workspaces and templates in Postgres.
+6. **Later.** Reconnects, multi-file projects, Git import, read-only links, interviewer and candidate roles, VM workers, accounts.
