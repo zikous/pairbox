@@ -1,10 +1,9 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import type { Room } from "@pairbox/shared";
-  import { copyLink } from "$lib/clipboard";
   import LogoMark from "$lib/components/brand/LogoMark.svelte";
+  import CopyButton from "$lib/components/shared/CopyButton.svelte";
   import { Skeleton } from "$lib/components/ui/skeleton";
-  import * as Tooltip from "$lib/components/ui/tooltip";
   import { roomUrl } from "$lib/router.svelte";
 
   /**
@@ -29,15 +28,13 @@
     <span class="text-muted-foreground/60">/</span>
     {#if room}
       <h1 class="truncate text-sm font-medium">{room.name}</h1>
-      <Tooltip.Root>
-        <Tooltip.Trigger
-          class="text-muted-foreground hover:text-foreground hover:border-ring hidden rounded border px-1.5 py-0.5 font-mono text-[11px] transition-colors md:block"
-          onclick={() => copyLink(roomUrl(room.id))}
-        >
-          {room.id}
-        </Tooltip.Trigger>
-        <Tooltip.Content>Copy invite link</Tooltip.Content>
-      </Tooltip.Root>
+      <CopyButton
+        text={roomUrl(room.id)}
+        title="Copy invite link"
+        class="text-muted-foreground hover:text-foreground hover:border-ring hidden items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[11px] transition-colors md:flex [&_svg]:size-3"
+      >
+        {room.id}
+      </CopyButton>
     {:else if room === null}
       <h1 class="text-muted-foreground text-sm">Unknown room</h1>
     {:else}

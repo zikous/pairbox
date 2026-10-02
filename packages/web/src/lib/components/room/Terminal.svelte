@@ -38,6 +38,8 @@
     white: "#fafafa",
   };
 
+  const MIN_COLUMNS = 20;
+
   let host: HTMLDivElement;
   let terminal = $state.raw<Terminal>();
 
@@ -52,18 +54,33 @@
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(host);
-    fit.fit();
-    // Re-measure once the web font has loaded, so cells line up.
-    void document.fonts.ready.then(() => fit.fit());
-
-    const stopOutput = session.onOutput((data) => term.write(data));
     const input = term.onData((data) => session.input(data));
-    const resize = new ResizeObserver(() => fit.fit());
+
+    // Text drawn into a very narrow terminal gets wrapped, and resizing back leaves the prompt
+    // scrambled. So the terminal never shrinks below MIN_COLUMNS (it keeps its last size while
+    // the pane is collapsing or collapsed), and output is only drawn once it has a real size.
+    let fontReady = false;
+    let disposed = false;
+    let stopOutput: (() => void) | undefined;
+
+    const refit = () => {
+      if (disposed || !fontReady) return;
+      const size = fit.proposeDimensions();
+      if (!size || size.cols < MIN_COLUMNS) return;
+      if (size.cols !== term.cols || size.rows !== term.rows) term.resize(size.cols, size.rows);
+      stopOutput ??= session.onOutput((data) => term.write(data));
+    };
+    const resize = new ResizeObserver(refit);
     resize.observe(host);
+    void document.fonts.ready.then(() => {
+      fontReady = true;
+      refit();
+    });
     terminal = term;
 
     return () => {
-      stopOutput();
+      disposed = true;
+      stopOutput?.();
       input.dispose();
       resize.disconnect();
       term.dispose();

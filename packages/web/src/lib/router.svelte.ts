@@ -34,4 +34,16 @@ export const router = {
 };
 
 export const roomPath = (id: string) => `/r/${id}`;
-export const roomUrl = (id: string) => `${location.origin}${roomPath(id)}`;
+
+/**
+ * The address others should use to reach this app, like VS Code's forwarded address:
+ * PUBLIC_URL if configured; otherwise the address we were opened on, unless that is
+ * localhost, in which case this machine's network address (works on the same network).
+ */
+function shareableOrigin(): string {
+  if (import.meta.env.PUBLIC_URL) return import.meta.env.PUBLIC_URL.replace(/\/$/, "");
+  const local = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
+  return local && import.meta.env.LAN_URL ? import.meta.env.LAN_URL : location.origin;
+}
+
+export const roomUrl = (id: string) => `${shareableOrigin()}${roomPath(id)}`;

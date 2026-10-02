@@ -7,10 +7,10 @@
   import { toast } from "svelte-sonner";
   import { LANGUAGES, isLanguage, type Language, type Room, type RunStatus } from "@pairbox/shared";
   import type { RoomSession } from "$lib/api";
-  import { copyLink } from "$lib/clipboard";
   import IconButton from "$lib/components/shared/IconButton.svelte";
   import LanguageDot from "$lib/components/shared/LanguageDot.svelte";
-  import { Button } from "$lib/components/ui/button";
+  import CopyButton from "$lib/components/shared/CopyButton.svelte";
+  import { Button, buttonVariants } from "$lib/components/ui/button";
   import * as Resizable from "$lib/components/ui/resizable";
   import * as Select from "$lib/components/ui/select";
   import { modKey } from "$lib/platform";
@@ -112,9 +112,9 @@
 <RoomFrame {room}>
   {#snippet actions()}
     <Participants {people} />
-    <Button variant="outline" size="sm" onclick={() => copyLink(inviteUrl)}>
+    <CopyButton text={inviteUrl} class={buttonVariants({ variant: "outline", size: "sm" })}>
       <Link /> Invite
-    </Button>
+    </CopyButton>
     <IconButton label="Preferences" onclick={() => (preferencesOpen = true)}>
       <Settings />
     </IconButton>

@@ -68,12 +68,25 @@
     ".cm-cursor": { borderLeftColor: "var(--foreground)" },
     "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground":
       { backgroundColor: "color-mix(in oklch, var(--ring) 35%, transparent)" },
+    // Other people's cursors: a 2px line in their color, with their name on hover.
+    // The library's floating dot is hidden: it lags behind the line when the cursor moves.
+    ".cm-ySelectionCaret": {
+      borderLeftWidth: "2px",
+      borderRightWidth: "0",
+      marginLeft: "-1px",
+      marginRight: "-1px",
+    },
+    ".cm-ySelectionCaretDot": { display: "none" },
     ".cm-ySelectionInfo": {
+      top: "-1.5em",
+      left: "-2px",
+      padding: "1px 5px",
+      borderRadius: "4px 4px 4px 0",
       fontFamily: "var(--font-sans)",
       fontSize: "11px",
-      fontWeight: "500",
-      padding: "1px 4px",
-      borderRadius: "3px",
+      fontWeight: "600",
+      lineHeight: "1.4",
+      pointerEvents: "none",
     },
     ".cm-tooltip": {
       border: "1px solid var(--border)",
