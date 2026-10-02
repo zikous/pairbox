@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { LanguageSchema } from "./language";
+import { RuntimeSchema } from "./runtime";
 
 export const ROOM_NAME_MAX = 60;
 
@@ -10,7 +10,7 @@ export const RoomSchema = z
   .object({
     id: RoomIdSchema,
     name: z.string(),
-    language: LanguageSchema,
+    runtime: RuntimeSchema,
     createdAt: z.string().meta({ format: "date-time" }),
   })
   .meta({ id: "Room" });
@@ -20,7 +20,7 @@ export type Room = z.infer<typeof RoomSchema>;
 export const CreateRoomSchema = z
   .object({
     name: z.string().trim().min(1).max(ROOM_NAME_MAX),
-    language: LanguageSchema,
+    runtime: RuntimeSchema,
   })
   .meta({ id: "CreateRoom" });
 export type CreateRoom = z.infer<typeof CreateRoomSchema>;

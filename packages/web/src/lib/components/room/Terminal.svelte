@@ -68,6 +68,7 @@
       const size = fit.proposeDimensions();
       if (!size || size.cols < MIN_COLUMNS) return;
       if (size.cols !== term.cols || size.rows !== term.rows) term.resize(size.cols, size.rows);
+      session.resize(term.cols, term.rows); // so the real shell wraps lines at the same width
       stopOutput ??= session.onOutput((data) => term.write(data));
     };
     const resize = new ResizeObserver(refit);

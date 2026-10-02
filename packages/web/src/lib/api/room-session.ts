@@ -3,10 +3,11 @@ import { WebsocketProvider } from "y-websocket";
 import type {
   ClientMessage,
   ServerMessage,
-  Language,
+  Runtime,
   Participant,
   Room,
   RunStatus,
+  SandboxState,
 } from "@pairbox/shared";
 import type { RoomSession, TerminalSession } from "./types";
 
@@ -34,8 +35,8 @@ export async function joinRoom(room: Room, me: Participant): Promise<RoomSession
     if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
   };
 
-  let language = room.language;
-  const languageListeners = new Set<(language: Language) => void>();
+  let runtime = room.runtime;
+  const runtimeListeners = new Set<(runtime: Runtime) => void>();
   const deletedListeners = new Set<() => void>();
   const terminal = createTerminal(send);
 
@@ -46,9 +47,11 @@ export async function joinRoom(room: Room, me: Participant): Promise<RoomSession
         return terminal.receiveOutput(message.data);
       case "status":
         return terminal.receiveStatus(message.status);
-      case "language":
-        language = message.language;
-        return languageListeners.forEach((listener) => listener(language));
+      case "sandbox":
+        return terminal.receiveSandbox(message.sandbox);
+      case "runtime":
+        runtime = message.runtime;
+        return runtimeListeners.forEach((listener) => listener(runtime));
       case "room_deleted":
         return deletedListeners.forEach((listener) => listener());
     }
@@ -71,12 +74,12 @@ export async function joinRoom(room: Room, me: Participant): Promise<RoomSession
     doc,
     awareness: provider.awareness,
     terminal,
-    language: () => language,
-    onLanguage(listener) {
-      languageListeners.add(listener);
-      return () => languageListeners.delete(listener);
+    runtime: () => runtime,
+    onRuntime(listener) {
+      runtimeListeners.add(listener);
+      return () => runtimeListeners.delete(listener);
     },
-    setLanguage: (next) => send({ type: "set_language", language: next }),
+    setRuntime: (next) => send({ type: "set_runtime", runtime: next }),
     onDeleted(listener) {
       deletedListeners.add(listener);
       return () => deletedListeners.delete(listener);
@@ -91,10 +94,13 @@ function createTerminal(send: (message: ClientMessage) => void) {
   const statusListeners = new Set<(status: RunStatus) => void>();
   let scrollback = "";
   let status: RunStatus = { state: "idle" };
+  let sandbox: SandboxState = { state: "starting" };
+  const sandboxListeners = new Set<(sandbox: SandboxState) => void>();
 
   const terminal: TerminalSession & {
     receiveOutput(data: string): void;
     receiveStatus(status: RunStatus): void;
+    receiveSandbox(sandbox: SandboxState): void;
   } = {
     onOutput(listener) {
       if (scrollback) listener(scrollback);
@@ -110,11 +116,21 @@ function createTerminal(send: (message: ClientMessage) => void) {
     run: () => send({ type: "run" }),
     stop: () => send({ type: "stop" }),
     reset: () => send({ type: "reset" }),
+    resize: (cols, rows) => send({ type: "resize", cols, rows }),
+    onSandbox(listener) {
+      listener(sandbox);
+      sandboxListeners.add(listener);
+      return () => sandboxListeners.delete(listener);
+    },
 
     receiveOutput(data) {
       // "\x1bc" resets the terminal, so older output no longer matters.
       scrollback = data.includes("\x1bc") ? data : (scrollback + data).slice(-SCROLLBACK_MAX);
       outputListeners.forEach((listener) => listener(data));
+    },
+    receiveSandbox(next) {
+      sandbox = next;
+      sandboxListeners.forEach((listener) => listener(next));
     },
     receiveStatus(next) {
       status = next;

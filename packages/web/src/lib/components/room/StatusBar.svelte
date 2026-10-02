@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { RunStatus } from "@pairbox/shared";
+  import type { RunStatus, SandboxState } from "@pairbox/shared";
   import type { Keymap } from "$lib/prefs.svelte";
 
   interface Props {
@@ -7,9 +7,10 @@
     cursor: { line: number; column: number };
     keymap: Keymap;
     status: RunStatus;
+    sandbox: SandboxState;
   }
 
-  let { online, cursor, keymap, status }: Props = $props();
+  let { online, cursor, keymap, status, sandbox }: Props = $props();
 
   const KEYMAP_LABEL: Record<Keymap, string> = {
     default: "Default keys",
@@ -36,6 +37,12 @@
       <span class={{ "text-destructive": status.exitCode !== 0 }}>
         Exit {status.exitCode} · {status.durationMs} ms
       </span>
+    {:else if sandbox.state === "waiting"}
+      Waiting for a sandbox · #{sandbox.position}
+    {:else if sandbox.state === "starting"}
+      Starting sandbox…
+    {:else if sandbox.state === "lost"}
+      <span class="text-destructive">Sandbox lost</span>
     {:else}
       Sandbox ready
     {/if}

@@ -5,10 +5,17 @@
   import type { Pane } from "paneforge";
   import { mode } from "mode-watcher";
   import { toast } from "svelte-sonner";
-  import { LANGUAGES, isLanguage, type Language, type Room, type RunStatus } from "@pairbox/shared";
+  import {
+    RUNTIMES,
+    isRuntime,
+    type Runtime,
+    type Room,
+    type RunStatus,
+    type SandboxState,
+  } from "@pairbox/shared";
   import type { RoomSession } from "$lib/api";
   import IconButton from "$lib/components/shared/IconButton.svelte";
-  import LanguageDot from "$lib/components/shared/LanguageDot.svelte";
+  import RuntimeDot from "$lib/components/shared/RuntimeDot.svelte";
   import CopyButton from "$lib/components/shared/CopyButton.svelte";
   import { Button, buttonVariants } from "$lib/components/ui/button";
   import * as Resizable from "$lib/components/ui/resizable";
@@ -22,14 +29,16 @@
   import Participants, { type Person } from "./Participants.svelte";
   import PreferencesDialog from "./PreferencesDialog.svelte";
   import RoomFrame from "./RoomFrame.svelte";
+  import SandboxOverlay from "./SandboxOverlay.svelte";
   import StatusBar from "./StatusBar.svelte";
   import Terminal from "./Terminal.svelte";
 
   /** The live room: editor and terminal side by side, inside the room frame. */
   let { room, session }: { room: Room; session: RoomSession } = $props();
 
-  let language = $state<Language>("python");
+  let runtime = $state<Runtime>("python");
   let status = $state<RunStatus>({ state: "idle" });
+  let sandbox = $state<SandboxState>({ state: "starting" });
   let people = $state<Person[]>([]);
   let cursor = $state({ line: 1, column: 1 });
   let preferencesOpen = $state(false);
@@ -55,9 +64,10 @@
     session.awareness.on("change", refreshPeople);
     refreshPeople();
 
-    language = session.language();
-    const stopLanguage = session.onLanguage((next) => (language = next));
+    runtime = session.runtime();
+    const stopLanguage = session.onRuntime((next) => (runtime = next));
     const stopStatus = session.terminal.onStatus((next) => (status = next));
+    const stopSandbox = session.terminal.onSandbox((next) => (sandbox = next));
     const stopDeleted = session.onDeleted(() => {
       toast.error("The host deleted this room");
       router.navigate("/");
@@ -67,6 +77,7 @@
       session.awareness.off("change", refreshPeople);
       stopLanguage();
       stopStatus();
+      stopSandbox();
       stopDeleted();
     };
   });
@@ -101,8 +112,8 @@
     }
   }
 
-  function changeLanguage(value: string) {
-    if (isLanguage(value)) session.setLanguage(value);
+  function changeRuntime(value: string) {
+    if (isRuntime(value)) session.setRuntime(value);
   }
 </script>
 
@@ -127,19 +138,19 @@
     <Resizable.Pane defaultSize={58} minSize={25} class="flex flex-col">
       <PaneHeader>
         {#snippet tab()}
-          <LanguageDot {language} />{LANGUAGES[language].file}
+          <RuntimeDot {runtime} />{RUNTIMES[runtime].file}
         {/snippet}
         {#snippet actions()}
-          <Select.Root type="single" value={language} onValueChange={changeLanguage}>
+          <Select.Root type="single" value={runtime} onValueChange={changeRuntime}>
             <Select.Trigger
               size="sm"
               class="h-7 border-0 bg-transparent font-mono text-xs shadow-none dark:bg-transparent"
               aria-label="Language"
             >
-              {LANGUAGES[language].label}
+              {RUNTIMES[runtime].label}
             </Select.Trigger>
             <Select.Content align="end">
-              {#each Object.entries(LANGUAGES) as [id, { label }] (id)}
+              {#each Object.entries(RUNTIMES) as [id, { label }] (id)}
                 <Select.Item value={id} {label} />
               {/each}
             </Select.Content>
@@ -150,7 +161,7 @@
         <Editor
           doc={session.doc}
           awareness={session.awareness}
-          {language}
+          {runtime}
           keymap={prefs.keymap}
           {dark}
           onrun={run}
@@ -188,21 +199,22 @@
               <Square class="fill-current" /> Stop
             </Button>
           {:else}
-            <Button size="sm" onclick={run}>
+            <Button size="sm" onclick={run} disabled={sandbox.state !== "ready"}>
               <Play class="fill-current" /> Run
               <span class="font-mono text-[10px] opacity-60">{modKey}↵</span>
             </Button>
           {/if}
         {/snippet}
       </PaneHeader>
-      <div class="min-h-0 flex-1">
+      <div class="relative min-h-0 flex-1">
         <Terminal bind:this={terminal} session={session.terminal} {dark} />
+        <SandboxOverlay {sandbox} {runtime} onreset={() => session.terminal.reset()} />
       </div>
     </Resizable.Pane>
   </Resizable.PaneGroup>
 
   {#snippet footer()}
-    <StatusBar online={people.length} {cursor} keymap={prefs.keymap} {status} />
+    <StatusBar online={people.length} {cursor} keymap={prefs.keymap} {status} {sandbox} />
   {/snippet}
 </RoomFrame>
 

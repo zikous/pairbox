@@ -1,10 +1,10 @@
 <script lang="ts">
   import { ArrowRight, Ellipsis, ExternalLink, Link, Plus, Trash2 } from "@lucide/svelte";
-  import { LANGUAGES, type Room } from "@pairbox/shared";
+  import { RUNTIMES, type Room } from "@pairbox/shared";
   import { copyLink } from "$lib/clipboard";
   import LogoMark from "$lib/components/brand/LogoMark.svelte";
   import Delayed from "$lib/components/shared/Delayed.svelte";
-  import LanguageDot from "$lib/components/shared/LanguageDot.svelte";
+  import RuntimeDot from "$lib/components/shared/RuntimeDot.svelte";
   import { Button, buttonVariants } from "$lib/components/ui/button";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import { Skeleton } from "$lib/components/ui/skeleton";
@@ -69,7 +69,7 @@
             />
           </a>
           <span class="text-muted-foreground hidden items-center gap-2 font-mono text-xs sm:flex">
-            <LanguageDot language={room.language} />{LANGUAGES[room.language].file}
+            <RuntimeDot runtime={room.runtime} />{RUNTIMES[room.runtime].file}
           </span>
           <span class="text-muted-foreground hidden font-mono text-xs sm:block">{room.id}</span>
           <span class="text-muted-foreground hidden text-xs sm:block"

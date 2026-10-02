@@ -4,8 +4,9 @@
  * the browser uses the inferred types.
  */
 export * from "./error";
-export * from "./language";
 export * from "./participant";
 export * from "./room";
 export * from "./run";
+export * from "./runtime";
 export * from "./session";
+export * from "./workers";

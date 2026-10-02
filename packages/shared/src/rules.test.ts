@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isLanguage, normalizeDisplayName, normalizeRoomName } from "./index";
+import { isRuntime, normalizeDisplayName, normalizeRoomName } from "./index";
 
 describe("normalizeRoomName", () => {
   it("trims and collapses whitespace", () => {
@@ -20,10 +20,10 @@ describe("normalizeDisplayName", () => {
   });
 });
 
-describe("isLanguage", () => {
-  it("accepts only supported languages", () => {
-    expect(isLanguage("python")).toBe(true);
-    expect(isLanguage("cobol")).toBe(false);
-    expect(isLanguage("toString")).toBe(false);
+describe("isRuntime", () => {
+  it("accepts only supported runtimes", () => {
+    expect(isRuntime("python")).toBe(true);
+    expect(isRuntime("cobol")).toBe(false);
+    expect(isRuntime("toString")).toBe(false);
   });
 });

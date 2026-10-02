@@ -20,7 +20,7 @@ export default ts.config(
     languageOptions: { globals: globals.browser },
   },
   {
-    files: ["packages/server/**"],
+    files: ["packages/{api,pool,worker}/**"],
     languageOptions: { globals: globals.node },
   },
   {

@@ -1,0 +1,21 @@
+# The browser app, plus the api behind /api and /ws. ${API_PORT} is filled in from the environment.
+server {
+  listen 80;
+  root /usr/share/nginx/html;
+
+  location / {
+    try_files $uri /index.html;
+  }
+
+  location /api/ {
+    proxy_pass http://api:${API_PORT};
+  }
+
+  location /ws/ {
+    proxy_pass http://api:${API_PORT};
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 1h;
+  }
+}

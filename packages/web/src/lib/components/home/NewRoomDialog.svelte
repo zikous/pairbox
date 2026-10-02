@@ -1,9 +1,9 @@
 <script lang="ts">
   import { toast } from "svelte-sonner";
-  import { LANGUAGES, isLanguage, normalizeRoomName, type Language } from "@pairbox/shared";
+  import { RUNTIMES, isRuntime, normalizeRoomName, type Runtime } from "@pairbox/shared";
   import { api } from "$lib/api";
   import { errorMessage } from "$lib/format";
-  import LanguageDot from "$lib/components/shared/LanguageDot.svelte";
+  import RuntimeDot from "$lib/components/shared/RuntimeDot.svelte";
   import { Button, buttonVariants } from "$lib/components/ui/button";
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Field from "$lib/components/ui/field";
@@ -15,7 +15,7 @@
   let { open = $bindable() }: { open: boolean } = $props();
 
   let name = $state("");
-  let language = $state<Language>("python");
+  let runtime = $state<Runtime>("python");
   let creating = $state(false);
   const validName = $derived(normalizeRoomName(name));
 
@@ -23,7 +23,7 @@
   $effect(() => {
     if (!open) return;
     name = "";
-    language = "python";
+    runtime = "python";
   });
 
   async function submit(event: SubmitEvent) {
@@ -31,7 +31,7 @@
     if (!validName) return;
     creating = true;
     try {
-      const room = await api.rooms.create({ name: validName, language });
+      const room = await api.rooms.create({ name: validName, runtime });
       open = false;
       router.navigate(roomPath(room.id));
     } catch (error) {
@@ -59,16 +59,16 @@
         <Field.Field>
           <Field.Label>Starting language</Field.Label>
           <div class="grid grid-cols-2 gap-2" role="radiogroup">
-            {#each Object.entries(LANGUAGES) as [id, { label, file }] (id)}
+            {#each Object.entries(RUNTIMES) as [id, { label, file }] (id)}
               <button
                 type="button"
                 role="radio"
-                aria-checked={language === id}
+                aria-checked={runtime === id}
                 class="hover:bg-muted/50 aria-checked:border-primary aria-checked:bg-primary/5 focus-visible:ring-ring/50 flex flex-col items-start gap-1 rounded-md border p-3 text-left transition-colors outline-none focus-visible:ring-3"
-                onclick={() => isLanguage(id) && (language = id)}
+                onclick={() => isRuntime(id) && (runtime = id)}
               >
                 <span class="flex items-center gap-2 text-sm font-medium">
-                  {#if isLanguage(id)}<LanguageDot language={id} />{/if}{label}
+                  {#if isRuntime(id)}<RuntimeDot runtime={id} />{/if}{label}
                 </span>
                 <span class="text-muted-foreground font-mono text-xs">{file}</span>
               </button>

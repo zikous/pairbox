@@ -1,7 +1,7 @@
 <script lang="ts">
   import { fade } from "svelte/transition";
-  import { LANGUAGES, normalizeDisplayName, type Room } from "@pairbox/shared";
-  import LanguageDot from "$lib/components/shared/LanguageDot.svelte";
+  import { RUNTIMES, normalizeDisplayName, type Room } from "@pairbox/shared";
+  import RuntimeDot from "$lib/components/shared/RuntimeDot.svelte";
   import { Button } from "$lib/components/ui/button";
   import * as Field from "$lib/components/ui/field";
   import { Input } from "$lib/components/ui/input";
@@ -25,7 +25,7 @@
       <p class="label-mono">Joining</p>
       <h2 class="text-lg font-semibold tracking-tight">{room.name}</h2>
       <p class="text-muted-foreground flex items-center gap-2 font-mono text-xs">
-        <LanguageDot language={room.language} />{LANGUAGES[room.language].file}
+        <RuntimeDot runtime={room.runtime} />{RUNTIMES[room.runtime].file}
         <span>·</span>{room.id}
       </p>
     </div>

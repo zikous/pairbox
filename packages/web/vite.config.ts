@@ -16,12 +16,12 @@ function lanAddress(): string | undefined {
 export default defineConfig(({ command, mode }) => {
   // Same .env as the API server (see .env.example at the repo root).
   const env = loadEnv(mode, repoRoot, "");
-  if (command === "serve" && (!env["API_PORT"] || !env["WEB_PORT"])) {
+  if (command === "serve" && (!env["API_PORT"] || !env["DEV_PORT"])) {
     throw new Error(
-      "API_PORT and WEB_PORT are not set. Copy .env.example to .env at the repo root.",
+      "API_PORT and DEV_PORT are not set. Copy .env.example to .env at the repo root.",
     );
   }
-  const api = `${env["API_HOST"]}:${env["API_PORT"]}`;
+  const api = `127.0.0.1:${env["API_PORT"]}`;
   const lan = command === "serve" ? lanAddress() : undefined;
 
   return {
@@ -32,15 +32,13 @@ export default defineConfig(({ command, mode }) => {
     // Used to build invite links (see roomUrl in src/lib/router.svelte.ts).
     define: {
       "import.meta.env.PUBLIC_URL": JSON.stringify(env["PUBLIC_URL"] ?? ""),
-      "import.meta.env.LAN_URL": JSON.stringify(lan ? `http://${lan}:${env["WEB_PORT"]}` : ""),
+      "import.meta.env.LAN_URL": JSON.stringify(lan ? `http://${lan}:${env["DEV_PORT"]}` : ""),
     },
     server: {
-      port: Number(env["WEB_PORT"]),
+      port: Number(env["DEV_PORT"]),
       strictPort: true,
       // Listen on the local network too, so invite links work for others on the same Wi-Fi.
       host: true,
-      // Accept requests through `pnpm tunnel` (Cloudflare quick tunnels).
-      allowedHosts: [".trycloudflare.com"],
       // The API server runs separately; forward its routes to it.
       proxy: {
         "/api": `http://${api}`,

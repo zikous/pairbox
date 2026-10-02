@@ -1,0 +1,103 @@
+# Everything pairbox needs on one machine: `docker compose up --build`.
+# Settings come from .env (see .env.example).
+name: pairbox
+
+x-worker: &worker
+  environment:
+    WORKER_PORT: ${WORKER_PORT}
+    POOL_URL: http://pool:${POOL_PORT}
+    INTERNAL_SECRET: ${INTERNAL_SECRET}
+  # Stand-in for a VM: room code can only write to its own folders, with capped resources.
+  read_only: true
+  tmpfs:
+    - /workspace:uid=1001,gid=1001,mode=0755,exec,size=128m
+    - /home/sandbox:uid=1001,gid=1001,mode=0755,exec,size=64m
+    - /tmp:mode=1777,exec,size=64m
+  networks: [workers]
+  depends_on: [pool]
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/db:/docker-entrypoint-initdb.d:ro
+    # Published so tests and tools on this machine can reach it.
+    ports: ["${POSTGRES_PORT}:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 2s
+      retries: 15
+    networks: [backend]
+
+  pool:
+    build: { context: ., dockerfile: packages/pool/Dockerfile }
+    environment:
+      POOL_HOST: 0.0.0.0
+      POOL_PORT: ${POOL_PORT}
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+    networks: [backend, workers]
+    restart: unless-stopped
+
+  api:
+    build: { context: ., dockerfile: packages/api/Dockerfile }
+    environment:
+      API_HOST: 0.0.0.0
+      API_PORT: ${API_PORT}
+      HOST_SECRET: ${HOST_SECRET}
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      POOL_URL: http://pool:${POOL_PORT}
+    # Published so the Vite dev server (pnpm dev) can reach it.
+    ports: ["${API_PORT}:${API_PORT}"]
+    depends_on:
+      db: { condition: service_healthy }
+      pool: { condition: service_started }
+    networks: [backend, workers]
+    restart: unless-stopped
+
+  web:
+    build: { context: ., dockerfile: packages/web/Dockerfile }
+    environment:
+      API_PORT: ${API_PORT}
+    ports: ["${WEB_PORT}:80"]
+    depends_on: [api]
+    networks: [backend]
+
+  # Optional: makes the app reachable from any network through a free Cloudflare quick tunnel.
+  # Start it with `docker compose --profile tunnel up -d`, then find the public
+  # https://….trycloudflare.com address with `docker compose logs tunnel`.
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate --url http://web:80
+    profiles: [tunnel]
+    depends_on: [web]
+    networks: [backend]
+
+  worker-python:
+    <<: *worker
+    build: { context: ., dockerfile: packages/worker/Dockerfile, target: python }
+    deploy:
+      replicas: 3
+      resources: { limits: { cpus: "0.5", memory: 512M, pids: 256 } }
+
+  worker-typescript:
+    <<: *worker
+    build: { context: ., dockerfile: packages/worker/Dockerfile, target: typescript }
+    deploy:
+      replicas: 2
+      resources: { limits: { cpus: "0.5", memory: 512M, pids: 256 } }
+
+networks:
+  backend: {}
+  # Workers can talk to the api and the pool, but not to the internet.
+  workers:
+    internal: true
+
+volumes:
+  pgdata: {}

@@ -1,6 +1,14 @@
 import type { Awareness } from "y-protocols/awareness";
 import type * as Y from "yjs";
-import type { CreateRoom, Language, Participant, Room, RoomId, RunStatus } from "@pairbox/shared";
+import type {
+  CreateRoom,
+  Runtime,
+  Participant,
+  Room,
+  RoomId,
+  RunStatus,
+  SandboxState,
+} from "@pairbox/shared";
 
 /** Room management. Creating, listing and deleting require the host secret. */
 export interface RoomsApi {
@@ -16,9 +24,9 @@ export interface RoomSession {
   readonly doc: Y.Doc;
   readonly awareness: Awareness;
   readonly terminal: TerminalSession;
-  language(): Language;
-  onLanguage(listener: (language: Language) => void): () => void;
-  setLanguage(language: Language): void;
+  runtime(): Runtime;
+  onRuntime(listener: (runtime: Runtime) => void): () => void;
+  setRuntime(runtime: Runtime): void;
   /** Called when the host deletes the room while we're in it. */
   onDeleted(listener: () => void): () => void;
   leave(): void;
@@ -28,10 +36,13 @@ export interface RoomSession {
 export interface TerminalSession {
   onOutput(listener: (data: string) => void): () => void;
   onStatus(listener: (status: RunStatus) => void): () => void;
+  /** Whether a machine is behind the terminal yet (or the room is waiting in line). */
+  onSandbox(listener: (sandbox: SandboxState) => void): () => void;
   input(data: string): void;
   run(): void;
   stop(): void;
   reset(): void;
+  resize(cols: number, rows: number): void;
 }
 
 export interface Api {

@@ -13,20 +13,20 @@
   import { yCollab } from "y-codemirror.next";
   import type { Awareness } from "y-protocols/awareness";
   import type * as Y from "yjs";
-  import type { Language } from "@pairbox/shared";
+  import type { Runtime } from "@pairbox/shared";
   import type { Keymap } from "$lib/prefs.svelte";
 
   interface Props {
     doc: Y.Doc;
     awareness: Awareness;
-    language: Language;
+    runtime: Runtime;
     keymap: Keymap;
     dark: boolean;
     onrun: () => void;
     oncursor?: (position: { line: number; column: number }) => void;
   }
 
-  let { doc, awareness, language, keymap, dark, onrun, oncursor }: Props = $props();
+  let { doc, awareness, runtime, keymap, dark, onrun, oncursor }: Props = $props();
 
   let host: HTMLDivElement;
   let view = $state.raw<EditorView>();
@@ -34,8 +34,8 @@
   const themeSlot = new Compartment();
   const keymapSlot = new Compartment();
 
-  const languageExtension = (value: Language): Extension =>
-    value === "python" ? python() : javascript();
+  const languageExtension = (value: Runtime): Extension =>
+    value === "python" ? python() : javascript({ typescript: true });
 
   const keymapExtension = (value: Keymap): Extension =>
     value === "vim" ? vim() : value === "emacs" ? emacs() : [];
@@ -135,7 +135,7 @@
           basicSetup,
           tabIndentation,
           cursorReporter,
-          languageSlot.of(languageExtension(language)),
+          languageSlot.of(languageExtension(runtime)),
           themeSlot.of(themeExtension(dark)),
           baseTheme,
           yCollab(text, awareness),
@@ -148,7 +148,7 @@
   // Swap settings in place when props change, without recreating the editor.
   $effect(() => {
     view?.dispatch({
-      effects: languageSlot.reconfigure(languageExtension(language)),
+      effects: languageSlot.reconfigure(languageExtension(runtime)),
     });
   });
   $effect(() => {

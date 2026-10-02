@@ -175,6 +175,7 @@ Only active rooms are held in memory. Workspaces are saved shortly after each ch
 | pool | The pool service |
 | worker (×N) | The worker image, on the private network, with resource limits |
 | database | Postgres |
+| tunnel (optional) | A Cloudflare quick tunnel to `web`, for guests on other networks |
 
 To grow, start more workers, on this machine or others; they register with the pool themselves. Settings come from one `.env` file (see `.env.example`). Guests reach `web` through an exposed port or a tunnel.
 
