@@ -178,7 +178,7 @@ These are suggestions. Each one sits behind an adapter.
 | Storage | SQLite | Postgres, files |
 | Editor | CodeMirror 6 | Monaco |
 | Terminal | xterm.js | hterm |
-| Frontend build | Vite, no framework | Svelte, Solid |
+| Frontend | Svelte 5 + Vite | SolidJS, plain TypeScript |
 | Packaging | Docker Compose | Single executable via Bun |
 
 ## Milestones

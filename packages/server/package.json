@@ -1,0 +1,17 @@
+{
+  "name": "@pairbox/server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@pairbox/domain": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "tsx": "^4.23.15"
+  }
+}
