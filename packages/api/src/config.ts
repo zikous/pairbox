@@ -21,6 +21,9 @@ export const config = {
   internalSecret: required("INTERNAL_SECRET"),
   databaseUrl: required("DATABASE_URL"),
   poolUrl: required("POOL_URL"),
+  /** Optional: the app's public address, else the tunnel's (see .env.example). */
+  publicUrl: process.env["PUBLIC_URL"] || undefined,
+  tunnelStatusUrl: process.env["TUNNEL_STATUS_URL"] || undefined,
   production,
 };
 

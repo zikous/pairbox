@@ -1,3 +1,5 @@
+import type { ShareInfo } from "@pairbox/shared";
+
 export type Route = { name: "home" } | { name: "room"; id: string } | { name: "not-found" };
 
 function parse(pathname: string): Route {
@@ -35,13 +37,29 @@ export const router = {
 
 export const roomPath = (id: string) => `/r/${id}`;
 
+/** The public address from the api (PUBLIC_URL or the tunnel's), once known. */
+let publicOrigin = $state<string | null>(null);
+
+async function loadPublicOrigin(attempt = 0): Promise<void> {
+  try {
+    const response = await fetch("/api/share");
+    const info = (await response.json()) as ShareInfo;
+    publicOrigin = info.baseUrl;
+    // A tunnel takes a few seconds to get its address: ask again for up to a minute.
+    if (info.pending && attempt < 12) setTimeout(() => void loadPublicOrigin(attempt + 1), 5_000);
+  } catch {
+    // No api reachable: invite links fall back to the address we were opened on.
+  }
+}
+void loadPublicOrigin();
+
 /**
- * The address others should use to reach this app, like VS Code's forwarded address:
- * PUBLIC_URL if configured; otherwise the address we were opened on, unless that is
+ * The address others should use to reach this app, like VS Code's forwarded address: the
+ * public address if there is one; otherwise the address we were opened on, unless that is
  * localhost, in which case this machine's network address (works on the same network).
  */
 function shareableOrigin(): string {
-  if (import.meta.env.PUBLIC_URL) return import.meta.env.PUBLIC_URL.replace(/\/$/, "");
+  if (publicOrigin) return publicOrigin;
   const local = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
   return local && import.meta.env.LAN_URL ? import.meta.env.LAN_URL : location.origin;
 }

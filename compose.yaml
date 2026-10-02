@@ -53,6 +53,8 @@ services:
       INTERNAL_SECRET: ${INTERNAL_SECRET}
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       POOL_URL: http://pool:${POOL_PORT}
+      PUBLIC_URL: ${PUBLIC_URL}
+      TUNNEL_STATUS_URL: http://tunnel:2000
     # Published so the Vite dev server (pnpm dev) can reach it.
     ports: ["${API_PORT}:${API_PORT}"]
     depends_on:
@@ -69,12 +71,12 @@ services:
     depends_on: [api]
     networks: [backend]
 
-  # Optional: makes the app reachable from any network through a free Cloudflare quick tunnel.
-  # Start it with `docker compose --profile tunnel up -d`, then find the public
-  # https://….trycloudflare.com address with `docker compose logs tunnel`.
+  # Makes the app reachable from any network through a free Cloudflare quick tunnel. The api
+  # reads its public https://….trycloudflare.com address from the status port and puts it in
+  # invite links. On by default through COMPOSE_PROFILES in .env; remove "tunnel" there to opt out.
   tunnel:
     image: cloudflare/cloudflared:latest
-    command: tunnel --no-autoupdate --url http://web:80
+    command: tunnel --no-autoupdate --metrics 0.0.0.0:2000 --url http://web:80
     profiles: [tunnel]
     depends_on: [web]
     networks: [backend]

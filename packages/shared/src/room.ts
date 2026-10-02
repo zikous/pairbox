@@ -25,6 +25,17 @@ export const CreateRoomSchema = z
   .meta({ id: "CreateRoom" });
 export type CreateRoom = z.infer<typeof CreateRoomSchema>;
 
+/** Body of `GET /api/share`: where invite links should point. */
+export const ShareInfoSchema = z
+  .object({
+    /** Public address of the app, or null to use the address it was opened on. */
+    baseUrl: z.url().nullable(),
+    /** True while a tunnel is starting and its address isn't known yet: ask again shortly. */
+    pending: z.boolean(),
+  })
+  .meta({ id: "ShareInfo" });
+export type ShareInfo = z.infer<typeof ShareInfoSchema>;
+
 /** Trims and collapses whitespace. Returns null when the name is unusable. */
 export function normalizeRoomName(raw: string): string | null {
   const name = raw.trim().replace(/\s+/g, " ");

@@ -9,6 +9,8 @@ const app = await createServer({
   hostSecret: config.hostSecret,
   db: database.db,
   sandboxes: new WorkerSandboxes(config.poolUrl, config.internalSecret),
+  publicUrl: config.publicUrl,
+  tunnelStatusUrl: config.tunnelStatusUrl,
   logger: config.production ? true : { transport: { target: "pino-pretty" } },
 });
 app.addHook("onClose", () => database.close());

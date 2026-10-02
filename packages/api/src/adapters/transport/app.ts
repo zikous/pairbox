@@ -3,6 +3,7 @@ import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import websocket from "@fastify/websocket";
 import { z } from "zod";
+import { ShareInfoSchema } from "@pairbox/shared";
 import {
   jsonSchemaTransform,
   jsonSchemaTransformObject,
@@ -14,6 +15,7 @@ import type { RoomEvents } from "../../application/events";
 import type { RoomService } from "../../application/rooms";
 import type { TerminalService } from "../../application/terminals";
 import type { YjsCollaboration } from "../collaboration/yjs-collaboration";
+import type { PublicAddress } from "../sharing/public-address";
 import { errorHandler } from "./errors";
 import { roomSockets } from "./room-sockets";
 import { roomsRoutes } from "./rooms-routes";
@@ -23,12 +25,13 @@ export interface AppDeps {
   terminals: TerminalService;
   events: RoomEvents;
   collaboration: YjsCollaboration;
+  publicAddress: PublicAddress;
   hostSecret: string;
   logger?: FastifyServerOptions["logger"];
 }
 
 /** Builds the HTTP and WebSocket server. API docs are served at /docs. */
-export async function buildApp({ logger = false, hostSecret, ...deps }: AppDeps) {
+export async function buildApp({ logger = false, hostSecret, publicAddress, ...deps }: AppDeps) {
   const app = Fastify({ logger }).withTypeProvider<ZodTypeProvider>();
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -68,6 +71,17 @@ export async function buildApp({ logger = false, hostSecret, ...deps }: AppDeps)
       },
     },
     () => ({ status: "ok" as const }),
+  );
+  app.get(
+    "/api/share",
+    {
+      schema: {
+        summary: "Where invite links should point",
+        tags: ["meta"],
+        response: { 200: ShareInfoSchema },
+      },
+    },
+    () => publicAddress.get(),
   );
   await app.register(roomsRoutes, { prefix: "/api/rooms", rooms: deps.rooms, hostSecret });
   await app.register(roomSockets, { prefix: "/ws/rooms", ...deps });

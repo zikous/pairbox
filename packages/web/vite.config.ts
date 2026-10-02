@@ -31,7 +31,6 @@ export default defineConfig(({ command, mode }) => {
     },
     // Used to build invite links (see roomUrl in src/lib/router.svelte.ts).
     define: {
-      "import.meta.env.PUBLIC_URL": JSON.stringify(env["PUBLIC_URL"] ?? ""),
       "import.meta.env.LAN_URL": JSON.stringify(lan ? `http://${lan}:${env["DEV_PORT"]}` : ""),
     },
     server: {
