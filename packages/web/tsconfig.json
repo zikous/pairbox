@@ -4,7 +4,8 @@
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "types": ["svelte", "vite/client"],
     "allowJs": true,
-    "checkJs": true
+    "checkJs": true,
+    "paths": { "$lib": ["./src/lib"], "$lib/*": ["./src/lib/*"] }
   },
   "include": ["src/**/*.ts", "src/**/*.svelte", "vite.config.ts"]
 }

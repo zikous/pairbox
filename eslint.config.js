@@ -4,7 +4,10 @@ import svelte from "eslint-plugin-svelte";
 import globals from "globals";
 
 export default ts.config(
-  { ignores: ["**/dist/", "**/node_modules/"] },
+  {
+    // Vendored shadcn-svelte components; updated with the shadcn-svelte CLI.
+    ignores: ["**/dist/", "**/node_modules/", "packages/web/src/lib/components/ui/"],
+  },
   js.configs.recommended,
   ...ts.configs.strict,
   ...svelte.configs["flat/recommended"],
@@ -24,10 +27,7 @@ export default ts.config(
     // The domain is pure: it must not depend on any other package or runtime.
     files: ["packages/domain/**"],
     rules: {
-      "no-restricted-imports": [
-        "error",
-        { patterns: ["@pairbox/*", "node:*"] },
-      ],
+      "no-restricted-imports": ["error", { patterns: ["@pairbox/*", "node:*"] }],
     },
   },
 );

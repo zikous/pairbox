@@ -179,6 +179,7 @@ These are suggestions. Each one sits behind an adapter.
 | Editor | CodeMirror 6 | Monaco |
 | Terminal | xterm.js | hterm |
 | Frontend | Svelte 5 + Vite | SolidJS, plain TypeScript |
+| UI components | shadcn-svelte (Bits UI + Tailwind) | Bits UI alone, plain CSS |
 | Packaging | Docker Compose | Single executable via Bun |
 
 ## Milestones
