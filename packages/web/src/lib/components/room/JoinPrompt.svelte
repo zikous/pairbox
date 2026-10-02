@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { LANGUAGES, normalizeDisplayName, type Room } from "@pairbox/domain";
-  import Logo from "$lib/components/brand/Logo.svelte";
+  import { fade } from "svelte/transition";
+  import { LANGUAGES, normalizeDisplayName, type Room } from "@pairbox/shared";
   import LanguageDot from "$lib/components/shared/LanguageDot.svelte";
   import { Button } from "$lib/components/ui/button";
   import * as Field from "$lib/components/ui/field";
@@ -19,12 +19,11 @@
   }
 </script>
 
-<div class="dot-grid flex h-full flex-col items-center justify-center gap-8 p-4">
-  <Logo />
+<div class="dot-grid grid h-full place-items-center p-4" in:fade={{ duration: 150 }}>
   <form class="bg-card w-full max-w-sm rounded-lg border shadow-sm" onsubmit={submit}>
     <div class="space-y-1.5 border-b p-5">
       <p class="label-mono">Joining</p>
-      <h1 class="text-lg font-semibold tracking-tight">{room.name}</h1>
+      <h2 class="text-lg font-semibold tracking-tight">{room.name}</h2>
       <p class="text-muted-foreground flex items-center gap-2 font-mono text-xs">
         <LanguageDot language={room.language} />{LANGUAGES[room.language].file}
         <span>·</span>{room.id}

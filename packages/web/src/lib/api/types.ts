@@ -1,13 +1,13 @@
 import type { Awareness } from "y-protocols/awareness";
 import type * as Y from "yjs";
-import type { Language, Participant, Room, RoomId, RunStatus } from "@pairbox/domain";
+import type { CreateRoom, Language, Participant, Room, RoomId, RunStatus } from "@pairbox/shared";
 
 /** Room management. Creating, listing and deleting require the host secret. */
 export interface RoomsApi {
   unlock(secret: string): Promise<boolean>;
   list(): Promise<Room[]>;
   get(id: RoomId): Promise<Room | null>;
-  create(input: { name: string; language: Language }): Promise<Room>;
+  create(input: CreateRoom): Promise<Room>;
   remove(id: RoomId): Promise<void>;
 }
 
@@ -19,6 +19,8 @@ export interface RoomSession {
   language(): Language;
   onLanguage(listener: (language: Language) => void): () => void;
   setLanguage(language: Language): void;
+  /** Called when the host deletes the room while we're in it. */
+  onDeleted(listener: () => void): () => void;
   leave(): void;
 }
 

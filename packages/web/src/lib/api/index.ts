@@ -1,7 +1,15 @@
-import { createFakeApi } from "./fake";
+import { prefs } from "$lib/prefs.svelte";
+import { createHttpRooms } from "./http-rooms";
+import { joinRoom } from "./room-session";
 import type { Api } from "./types";
 
 export type * from "./types";
 
-/** Swap this for the real server adapter once it exists. */
-export const api: Api = createFakeApi();
+/** The server API: HTTP for rooms, WebSockets for live rooms. */
+export const api: Api = {
+  rooms: createHttpRooms({
+    hostSecret: () => prefs.hostSecret,
+    onUnauthorized: () => (prefs.hostSecret = ""),
+  }),
+  join: joinRoom,
+};

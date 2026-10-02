@@ -23,3 +23,6 @@ export const initials = (name: string): string =>
     .join("")
     .slice(0, 2)
     .toUpperCase();
+
+export const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);

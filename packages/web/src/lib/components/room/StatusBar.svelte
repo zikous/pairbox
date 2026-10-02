@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { RunStatus } from "@pairbox/domain";
+  import type { RunStatus } from "@pairbox/shared";
   import type { Keymap } from "$lib/prefs.svelte";
 
   interface Props {

@@ -1,6 +1,8 @@
 <script lang="ts">
-  import { LANGUAGES, isLanguage, normalizeRoomName, type Language } from "@pairbox/domain";
+  import { toast } from "svelte-sonner";
+  import { LANGUAGES, isLanguage, normalizeRoomName, type Language } from "@pairbox/shared";
   import { api } from "$lib/api";
+  import { errorMessage } from "$lib/format";
   import LanguageDot from "$lib/components/shared/LanguageDot.svelte";
   import { Button, buttonVariants } from "$lib/components/ui/button";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -28,10 +30,15 @@
     event.preventDefault();
     if (!validName) return;
     creating = true;
-    const room = await api.rooms.create({ name: validName, language });
-    creating = false;
-    open = false;
-    router.navigate(roomPath(room.id));
+    try {
+      const room = await api.rooms.create({ name: validName, language });
+      open = false;
+      router.navigate(roomPath(room.id));
+    } catch (error) {
+      toast.error("Couldn't create the room", { description: errorMessage(error) });
+    } finally {
+      creating = false;
+    }
   }
 </script>
 

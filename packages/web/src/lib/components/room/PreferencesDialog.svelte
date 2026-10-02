@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Check } from "@lucide/svelte";
   import { setMode, userPrefersMode } from "mode-watcher";
-  import { normalizeDisplayName } from "@pairbox/domain";
+  import { normalizeDisplayName } from "@pairbox/shared";
   import { Button } from "$lib/components/ui/button";
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Field from "$lib/components/ui/field";

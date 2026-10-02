@@ -1,21 +1,15 @@
 <script lang="ts">
+  import { fade } from "svelte/transition";
+  import Delayed from "$lib/components/shared/Delayed.svelte";
   import { Skeleton } from "$lib/components/ui/skeleton";
   import { Spinner } from "$lib/components/ui/spinner";
-  import LogoMark from "$lib/components/brand/LogoMark.svelte";
 
+  /** Placeholder for the room body: the editor and terminal panes, plus what we're waiting on. */
   let { label }: { label: string } = $props();
 </script>
 
-<div class="flex h-full flex-col" aria-busy="true">
-  <header class="flex h-11 shrink-0 items-center gap-3 border-b px-3">
-    <LogoMark />
-    <Skeleton class="h-4 w-40" />
-    <div class="ml-auto flex gap-2">
-      <Skeleton class="size-6 rounded-full" />
-      <Skeleton class="h-7 w-20" />
-    </div>
-  </header>
-  <div class="relative flex min-h-0 flex-1">
+<Delayed>
+  <div class="relative flex h-full" aria-busy="true" in:fade={{ duration: 150 }}>
     <div class="flex-[58] space-y-3 border-r p-4 pt-14">
       {#each [60, 82, 45, 70, 30] as width, i (i)}
         <Skeleton class="h-3.5" style="width: {width}%" />
@@ -33,5 +27,4 @@
       </div>
     </div>
   </div>
-  <div class="h-6 shrink-0 border-t"></div>
-</div>
+</Delayed>

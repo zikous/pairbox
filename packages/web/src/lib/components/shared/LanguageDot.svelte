@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Language } from "@pairbox/domain";
+  import type { Language } from "@pairbox/shared";
 
   let { language }: { language: Language } = $props();
   const COLORS: Record<Language, string> = {

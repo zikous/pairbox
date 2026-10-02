@@ -24,8 +24,8 @@ export default ts.config(
     languageOptions: { globals: globals.node },
   },
   {
-    // The domain is pure: it must not depend on any other package or runtime.
-    files: ["packages/domain/**"],
+    // Shared code runs in the browser and on the server: no Node APIs, no other packages.
+    files: ["packages/shared/**"],
     rules: {
       "no-restricted-imports": ["error", { patterns: ["@pairbox/*", "node:*"] }],
     },

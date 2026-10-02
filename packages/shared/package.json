@@ -1,10 +1,13 @@
 {
-  "name": "@pairbox/domain",
+  "name": "@pairbox/shared",
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",
   "scripts": {
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
     "typecheck": "tsc"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
   }
 }

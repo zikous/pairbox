@@ -7,6 +7,7 @@
   import { prefs } from "$lib/prefs.svelte";
 
   /** Asks for the host secret, which is needed to create and delete rooms. */
+  const dev = import.meta.env.DEV;
   let secret = $state("");
   let unlocking = $state(false);
   let error = $state("");
@@ -40,7 +41,8 @@
       <Field.Error>{error}</Field.Error>
     {:else}
       <Field.Description>
-        Needed to create and delete rooms. The fake API accepts any value.
+        Needed to create and delete rooms. It's the server's <code>HOST_SECRET</code>{#if dev},
+          which is <code>dev</code> in development{/if}.
       </Field.Description>
     {/if}
   </Field.Field>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Lock, Plus } from "@lucide/svelte";
-  import type { Room } from "@pairbox/domain";
+  import type { Room } from "@pairbox/shared";
+  import { toast } from "svelte-sonner";
   import { api } from "$lib/api";
   import Logo from "$lib/components/brand/Logo.svelte";
   import DeleteRoomDialog from "$lib/components/home/DeleteRoomDialog.svelte";
@@ -11,6 +12,7 @@
   import IconButton from "$lib/components/shared/IconButton.svelte";
   import ThemeMenu from "$lib/components/shared/ThemeMenu.svelte";
   import { Button } from "$lib/components/ui/button";
+  import { errorMessage } from "$lib/format";
   import { prefs } from "$lib/prefs.svelte";
 
   let rooms = $state<Room[]>();
@@ -21,7 +23,10 @@
   // Load the host's rooms once host access is unlocked.
   $effect(() => {
     if (!prefs.hostSecret) return;
-    api.rooms.list().then((list) => (rooms = list));
+    api.rooms.list().then(
+      (list) => (rooms = list),
+      (error) => toast.error("Couldn't load your rooms", { description: errorMessage(error) }),
+    );
   });
 
   function askDelete(room: Room) {

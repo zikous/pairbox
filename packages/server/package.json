@@ -4,14 +4,27 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/main.ts",
-    "test": "vitest run --passWithNoTests",
+    "start": "tsx src/main.ts",
+    "test": "vitest run",
     "typecheck": "tsc"
   },
   "dependencies": {
-    "@pairbox/domain": "workspace:*"
+    "@fastify/swagger": "^9.9.1",
+    "@fastify/swagger-ui": "^6.1.1",
+    "@fastify/websocket": "^11.3.1",
+    "@pairbox/shared": "workspace:*",
+    "fastify": "^5.12.5",
+    "fastify-type-provider-zod": "^7.0.0",
+    "lib0": "^0.2.119",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.33",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",
-    "tsx": "^4.23.15"
+    "@types/ws": "^8.18.2",
+    "pino-pretty": "^13.1.3",
+    "tsx": "^4.23.15",
+    "ws": "^8.22.0"
   }
 }

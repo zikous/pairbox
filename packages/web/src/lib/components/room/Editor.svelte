@@ -13,7 +13,7 @@
   import { yCollab } from "y-codemirror.next";
   import type { Awareness } from "y-protocols/awareness";
   import type * as Y from "yjs";
-  import type { Language } from "@pairbox/domain";
+  import type { Language } from "@pairbox/shared";
   import type { Keymap } from "$lib/prefs.svelte";
 
   interface Props {

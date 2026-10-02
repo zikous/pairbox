@@ -172,6 +172,7 @@ These are suggestions. Each one sits behind an adapter.
 |---|---|---|
 | Language | TypeScript (strict), browser and server | Rust or Go on the server |
 | Server runtime | Node.js | Bun, Deno |
+| HTTP framework | Fastify, with OpenAPI docs from Zod schemas | Hono, Express |
 | CRDT | Yjs | Automerge, Loro |
 | Transport | WebSockets | WebTransport |
 | Sandbox | Docker | gVisor, Firecracker, nsjail |

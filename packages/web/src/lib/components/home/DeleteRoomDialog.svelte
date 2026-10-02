@@ -1,7 +1,8 @@
 <script lang="ts">
   import { toast } from "svelte-sonner";
-  import type { Room } from "@pairbox/domain";
+  import type { Room } from "@pairbox/shared";
   import { api } from "$lib/api";
+  import { errorMessage } from "$lib/format";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import { buttonVariants } from "$lib/components/ui/button";
   import { Spinner } from "$lib/components/ui/spinner";
@@ -20,11 +21,16 @@
     if (!room) return;
     const deleted = room;
     deleting = true;
-    await api.rooms.remove(deleted.id);
-    deleting = false;
-    open = false;
-    ondeleted(deleted);
-    toast.success(`Deleted “${deleted.name}”`);
+    try {
+      await api.rooms.remove(deleted.id);
+      open = false;
+      ondeleted(deleted);
+      toast.success(`Deleted “${deleted.name}”`);
+    } catch (error) {
+      toast.error("Couldn't delete the room", { description: errorMessage(error) });
+    } finally {
+      deleting = false;
+    }
   }
 </script>
 

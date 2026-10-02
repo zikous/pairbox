@@ -1,8 +1,9 @@
 <script lang="ts">
   import { ArrowRight, Ellipsis, ExternalLink, Link, Plus, Trash2 } from "@lucide/svelte";
-  import { LANGUAGES, type Room } from "@pairbox/domain";
+  import { LANGUAGES, type Room } from "@pairbox/shared";
   import { copyLink } from "$lib/clipboard";
   import LogoMark from "$lib/components/brand/LogoMark.svelte";
+  import Delayed from "$lib/components/shared/Delayed.svelte";
   import LanguageDot from "$lib/components/shared/LanguageDot.svelte";
   import { Button, buttonVariants } from "$lib/components/ui/button";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
@@ -23,15 +24,17 @@
 </script>
 
 {#if !rooms}
-  <div class="bg-card divide-y rounded-lg border" aria-busy="true">
-    {#each [0, 1, 2] as i (i)}
-      <div class="flex items-center gap-4 px-4 py-3.5">
-        <Skeleton class="h-4 w-48" />
-        <Skeleton class="ml-auto h-3 w-16" />
-        <Skeleton class="h-3 w-20" />
-      </div>
-    {/each}
-  </div>
+  <Delayed>
+    <div class="bg-card divide-y rounded-lg border" aria-busy="true">
+      {#each [0, 1, 2] as i (i)}
+        <div class="flex items-center gap-4 px-4 py-3.5">
+          <Skeleton class="h-4 w-48" />
+          <Skeleton class="ml-auto h-3 w-16" />
+          <Skeleton class="h-3 w-20" />
+        </div>
+      {/each}
+    </div>
+  </Delayed>
 {:else if rooms.length === 0}
   <div
     class="bg-card flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-14 text-center"
