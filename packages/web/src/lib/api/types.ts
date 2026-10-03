@@ -9,8 +9,10 @@ import type {
   Participant,
   RecordingReplay,
   Room,
+  RoomCounts,
   RoomId,
-  RoomSummary,
+  RoomListQuery,
+  RoomPage,
   RoomView,
   RunStatus,
   Runtime,
@@ -28,7 +30,10 @@ export interface AuthApi {
 
 /** Booked sessions (rooms). Listing, booking and deleting are for their signed-in owner. */
 export interface RoomsApi {
-  list(): Promise<RoomSummary[]>;
+  /** One page of a tab (live, upcoming or past), searched and filtered. */
+  list(query: RoomListQuery): Promise<RoomPage>;
+  /** How many sessions each tab has. */
+  counts(): Promise<RoomCounts>;
   /** Anyone can look a room up by id. Null when it doesn't exist. */
   get(id: RoomId): Promise<RoomView | null>;
   create(input: CreateRoom): Promise<Room>;

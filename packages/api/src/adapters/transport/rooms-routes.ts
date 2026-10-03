@@ -5,14 +5,15 @@ import {
   AvailabilitySchema,
   CreateRoomSchema,
   ErrorSchema,
+  RoomCountsSchema,
   RoomIdSchema,
+  RoomListQuerySchema,
+  RoomPageSchema,
   RoomSchema,
-  RoomSummarySchema,
   RoomViewSchema,
 } from "@pairbox/shared";
 import type { AuthService } from "../../application/auth";
 import type { Scheduler } from "../../application/ports";
-import type { RecordingService } from "../../application/recordings";
 import type { RoomService } from "../../application/rooms";
 import { requireUser, sessionToken, signedInUser } from "./session";
 
@@ -21,10 +22,9 @@ const signedIn = [{ session: [] }];
 
 export const roomsRoutes: FastifyPluginAsyncZod<{
   rooms: RoomService;
-  recordings: RecordingService;
   auth: AuthService;
   scheduler: Scheduler;
-}> = async (app, { rooms, recordings, auth, scheduler }) => {
+}> = async (app, { rooms, auth, scheduler }) => {
   const onRequest = requireUser(auth);
 
   app.get(
@@ -33,16 +33,29 @@ export const roomsRoutes: FastifyPluginAsyncZod<{
       onRequest,
       schema: {
         summary: "List your sessions",
+        description:
+          "One page of a tab. `q` matches the session's name or a participant's; `from` and `to` bound its start.",
         tags: ["rooms"],
         security: signedIn,
-        response: { 200: z.array(RoomSummarySchema), 401: ErrorSchema },
+        querystring: RoomListQuerySchema,
+        response: { 200: RoomPageSchema, 401: ErrorSchema },
       },
     },
-    async (request) => {
-      const list = await rooms.list(signedInUser(request).id);
-      const participants = await recordings.participants(list.map((room) => room.id));
-      return list.map((room) => ({ ...room, participants: participants.get(room.id) ?? [] }));
+    (request) => rooms.search(signedInUser(request).id, request.query),
+  );
+
+  app.get(
+    "/counts",
+    {
+      onRequest,
+      schema: {
+        summary: "How many sessions are in each tab",
+        tags: ["rooms"],
+        security: signedIn,
+        response: { 200: RoomCountsSchema, 401: ErrorSchema },
+      },
     },
+    (request) => rooms.counts(signedInUser(request).id),
   );
 
   app.post(

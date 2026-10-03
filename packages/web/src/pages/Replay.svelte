@@ -1,9 +1,8 @@
 <script lang="ts">
-  import { ArrowLeft, Lock } from "@lucide/svelte";
+  import { ChevronRight, Lock } from "@lucide/svelte";
   import { mode } from "mode-watcher";
   import { RUNTIMES, type Recording } from "@pairbox/shared";
   import { api, HttpError } from "$lib/api";
-  import LogoMark from "$lib/components/brand/LogoMark.svelte";
   import ActivityList from "$lib/components/replay/ActivityList.svelte";
   import Timeline from "$lib/components/replay/Timeline.svelte";
   import Editor from "$lib/components/room/Editor.svelte";
@@ -12,7 +11,6 @@
   import Terminal from "$lib/components/room/Terminal.svelte";
   import StateMessage from "$lib/components/shared/StateMessage.svelte";
   import RuntimeDot from "$lib/components/shared/RuntimeDot.svelte";
-  import { Button } from "$lib/components/ui/button";
   import { dateTime, errorMessage } from "$lib/format";
   import { prefs } from "$lib/prefs.svelte";
   import { Replay } from "$lib/replay.svelte";
@@ -65,25 +63,21 @@
   }
 </script>
 
-<svelte:head><title>Replay · {roomName || "pairbox"}</title></svelte:head>
+<svelte:head><title>{roomName || "Recording"} · pairbox</title></svelte:head>
 
 {#if error}
-  <StateMessage icon={Lock} title="Can't replay this session" message={error}>
-    {#snippet actions()}<Button href="/" variant="outline" size="sm">Your rooms</Button>{/snippet}
-  </StateMessage>
+  <StateMessage icon={Lock} title="Can't replay this session" message={error} />
 {:else if !replay || !recording}
   <RoomLoading label="Loading the recording…" />
 {:else}
   <div class="flex h-full flex-col">
-    <header class="flex h-11 shrink-0 items-center gap-2.5 border-b px-3">
-      <a href="/" aria-label="Your rooms" class="hover:opacity-80"><LogoMark /></a>
-      <span class="text-muted-foreground/60">/</span>
-      <h1 class="truncate text-sm font-medium">{roomName}</h1>
-      <span class="text-muted-foreground hidden text-xs md:inline">
-        Replay · {dateTime(recording.startedAt)}
+    <header class="flex h-11 shrink-0 items-center gap-2 border-b px-4 text-sm">
+      <a href="/recordings" class="text-muted-foreground hover:text-foreground">Recordings</a>
+      <ChevronRight class="text-muted-foreground/60 size-3.5" />
+      <h1 class="truncate font-medium">{roomName}</h1>
+      <span class="text-muted-foreground ml-auto hidden text-xs md:inline">
+        {dateTime(recording.startedAt)}
       </span>
-      <Button href="/" variant="ghost" size="sm" class="ml-auto"><ArrowLeft /> Your sessions</Button
-      >
     </header>
 
     <main class="grid min-h-0 flex-1 grid-cols-[16rem_3fr_2fr] max-md:grid-cols-1">

@@ -5,7 +5,8 @@ import {
   type JoinStatus,
   type RecordingReplay,
   type Room,
-  type RoomSummary,
+  type RoomCounts,
+  type RoomPage,
   type RoomView,
   type User,
 } from "@pairbox/shared";
@@ -56,7 +57,13 @@ export const httpAuth: AuthApi = {
 };
 
 export const httpRooms: RoomsApi = {
-  list: () => request<RoomSummary[]>("GET", "/rooms"),
+  list: (query) => {
+    const params = Object.entries(query).flatMap(([key, value]) =>
+      value === undefined || value === "" ? [] : [[key, String(value)]],
+    );
+    return request<RoomPage>("GET", `/rooms?${new URLSearchParams(params)}`);
+  },
+  counts: () => request<RoomCounts>("GET", "/rooms/counts"),
   get: (id) => orNull(request<RoomView>("GET", `/rooms/${id}`)),
   create: (input) => request<Room>("POST", "/rooms", input),
   remove: (id) => request<undefined>("DELETE", `/rooms/${id}`),

@@ -80,3 +80,33 @@ export function normalizeRoomName(raw: string): string | null {
   const name = raw.trim().replace(/\s+/g, " ");
   return name.length > 0 && name.length <= ROOM_NAME_MAX ? name : null;
 }
+
+/** Which of your sessions to list: the tabs of the sessions page. */
+export const SessionTabSchema = z.enum(["live", "upcoming", "past"]);
+export type SessionTab = z.infer<typeof SessionTabSchema>;
+
+/** Query of `GET /api/rooms`: one page of a tab, filtered. */
+export const RoomListQuerySchema = z.object({
+  tab: SessionTabSchema,
+  /** Matches the session's name or a participant's name. */
+  q: z.string().trim().max(100).optional(),
+  runtime: RuntimeSchema.optional(),
+  /** Only sessions starting at or after / before these moments. */
+  from: DateTimeSchema.optional(),
+  to: DateTimeSchema.optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+});
+export type RoomListQuery = z.infer<typeof RoomListQuerySchema>;
+
+/** Body of `GET /api/rooms`. */
+export const RoomPageSchema = z
+  .object({ items: z.array(RoomSummarySchema), total: z.number().int() })
+  .meta({ id: "RoomPage" });
+export type RoomPage = z.infer<typeof RoomPageSchema>;
+
+/** Body of `GET /api/rooms/counts`: how many sessions each tab has. */
+export const RoomCountsSchema = z
+  .object({ live: z.number().int(), upcoming: z.number().int(), past: z.number().int() })
+  .meta({ id: "RoomCounts" });
+export type RoomCounts = z.infer<typeof RoomCountsSchema>;

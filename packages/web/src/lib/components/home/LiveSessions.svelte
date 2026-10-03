@@ -12,7 +12,7 @@
   let { rooms }: { rooms: RoomSummary[] } = $props();
 </script>
 
-<div class="grid gap-3 sm:grid-cols-2">
+<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
   {#each rooms as room (room.id)}
     {@const started = Date.parse(room.startsAt) <= clock.now}
     <div class="bg-card border-primary/40 flex flex-col gap-3 rounded-lg border p-4 shadow-sm">

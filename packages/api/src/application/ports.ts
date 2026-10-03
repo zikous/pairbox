@@ -5,7 +5,10 @@ import type {
   Recording,
   RecordingEvent,
   Room,
+  RoomCounts,
   RoomId,
+  RoomListQuery,
+  RoomPage,
   RunStatus,
   Runtime,
   User,
@@ -19,7 +22,9 @@ export interface OwnedRoom extends Room {
 }
 
 export interface RoomRepository {
-  listByOwner(ownerId: string): Promise<OwnedRoom[]>;
+  /** One page of the owner's sessions in a tab, with the total across all pages. */
+  search(ownerId: string, query: RoomListQuery, now: Date): Promise<RoomPage>;
+  counts(ownerId: string, now: Date): Promise<RoomCounts>;
   get(id: RoomId): Promise<OwnedRoom | undefined>;
   save(room: OwnedRoom): Promise<void>;
   delete(id: RoomId): Promise<void>;
@@ -105,7 +110,6 @@ export interface RecordingRepository {
   ): Promise<void>;
   /** A room has at most one recording. */
   getByRoom(roomId: RoomId): Promise<(Recording & { chunkCount: number }) | undefined>;
-  participantsByRoom(roomIds: RoomId[]): Promise<Map<RoomId, Participant[]>>;
 }
 
 /** Where recorded sessions are kept: a starting snapshot plus chunks of events. */
@@ -124,8 +128,8 @@ export interface RecordingStore {
 
 /** Told about everything that happens to the shared documents. */
 export interface CollaborationObserver {
-  /** The first person opened the room's document. `state` is the document at that moment. */
-  opened(roomId: RoomId, state: Uint8Array): void;
+  /** The first person opened the room's document. */
+  opened(roomId: RoomId): void;
   /** The last person closed it. */
   closed(roomId: RoomId): void;
   edited(roomId: RoomId, update: Uint8Array, by: Participant | undefined): void;

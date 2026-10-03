@@ -1,21 +1,3 @@
-const relative = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
-const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
-  ["year", 31_536_000],
-  ["month", 2_592_000],
-  ["week", 604_800],
-  ["day", 86_400],
-  ["hour", 3_600],
-  ["minute", 60],
-];
-
-export function timeAgo(iso: string): string {
-  const seconds = (new Date(iso).getTime() - Date.now()) / 1000;
-  for (const [unit, size] of UNITS) {
-    if (Math.abs(seconds) >= size) return relative.format(Math.round(seconds / size), unit);
-  }
-  return "just now";
-}
-
 export const initials = (name: string): string =>
   name
     .split(" ")
@@ -75,18 +57,17 @@ export function dayLabel(iso: string): string {
   return day.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
 }
 
-/** Groups items by the day they start on, keeping their order. */
-export function byDay<T extends { startsAt: string }>(items: T[]): { day: string; items: T[] }[] {
-  const groups: { day: string; items: T[] }[] = [];
-  for (const item of items) {
-    const day = dayLabel(item.startsAt);
-    const last = groups.at(-1);
-    if (last?.day === day) last.items.push(item);
-    else groups.push({ day, items: [item] });
-  }
-  return groups;
-}
-
 /** "14:00–15:00". */
 export const hours = (startsAt: string, endsAt: string): string =>
   `${time(new Date(startsAt))}–${time(new Date(endsAt))}`;
+
+/** A session's length: "30m", "1h", "1h 20m". */
+export function length(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  const [h, m] = [Math.floor(minutes / 60), minutes % 60];
+  return h ? (m ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+}
+
+/** The moment `days` from now (negative: ago), as an ISO timestamp. */
+export const daysFromNow = (days: number): string =>
+  new Date(Date.now() + days * 86_400_000).toISOString();

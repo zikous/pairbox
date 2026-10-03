@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
 import type {
   RecordingEvent,
@@ -191,9 +191,10 @@ describe("rooms", () => {
     expect(asGuest.json()).toEqual({ ...room, owner: false });
     const asOwner = await app.inject({ url: `/api/rooms/${room.id}`, headers });
     expect(asOwner.json()).toMatchObject({ owner: true });
-    expect((await app.inject({ url: "/api/rooms", headers })).json()).toEqual([
-      { ...room, participants: [] },
-    ]);
+    expect((await app.inject({ url: "/api/rooms?tab=live", headers })).json()).toEqual({
+      items: [{ ...room, participants: [] }],
+      total: 1,
+    });
 
     const deleted = await app.inject({ method: "DELETE", url: `/api/rooms/${room.id}`, headers });
     expect(deleted.statusCode).toBe(204);
@@ -220,13 +221,48 @@ describe("rooms", () => {
     const bob = await signUp("bob@example.com");
     const room = await createRoom(ada);
 
-    expect((await app.inject({ url: "/api/rooms", headers: bob })).json()).toEqual([]);
+    const list = await app.inject({ url: "/api/rooms?tab=live", headers: bob });
+    expect(list.json()).toEqual({ items: [], total: 0 });
     const steal = await app.inject({
       method: "DELETE",
       url: `/api/rooms/${room.id}`,
       headers: bob,
     });
     expect(steal.statusCode).toBe(403);
+  });
+
+  it("sorts sessions into tabs, searches them and pages through them", async () => {
+    const headers = await signUp();
+    const live = await createRoom(headers, { name: "Live one" });
+    const soon = await createRoom(headers, {
+      name: "Pairing 50%",
+      runtime: "typescript", // the python worker is taken by the first one
+      inMinutes: 5, // the owner can open it early
+    });
+    const later = await createRoom(headers, { name: "Later", inMinutes: 120 });
+    const latest = await createRoom(headers, { name: "Latest", inMinutes: 240 });
+    const list = async (query: string) =>
+      (await app.inject({ url: `/api/rooms?${query}`, headers })).json();
+    const names = async (query: string) => (await list(query)).items.map((room: Room) => room.name);
+
+    expect((await app.inject({ url: "/api/rooms/counts", headers })).json()).toEqual({
+      live: 2,
+      upcoming: 2,
+      past: 0,
+    });
+    expect(await names("tab=live")).toEqual([live.name, soon.name]);
+    expect(await names("tab=upcoming")).toEqual([later.name, latest.name]);
+    expect(await names("tab=live&q=50%25")).toEqual([soon.name]); // % is matched literally
+    expect(await names(`tab=upcoming&from=${encodeURIComponent(latest.startsAt)}`)).toEqual([
+      latest.name,
+    ]);
+    expect(await list("tab=upcoming&pageSize=1&page=2")).toMatchObject({
+      items: [{ id: latest.id }],
+      total: 2,
+    });
+
+    await app.inject({ method: "POST", url: `/api/rooms/${live.id}/end`, headers });
+    expect(await names("tab=past")).toEqual([live.name]);
   });
 
   it("rejects invalid input", async () => {
@@ -360,11 +396,15 @@ describe("recordings", () => {
       await new Promise((resolve) => setTimeout(resolve, 150)); // leaving saves what was recorded
     }
 
-    const replay: RecordingReplay = (
-      await app.inject({ url: `/api/rooms/${room.id}/recording`, headers: ada })
-    ).json();
-    const inputs = replay.events.flatMap((e) => (e.type === "input" ? [e.data] : []));
-    expect(inputs).toEqual(["ls\r", "pwd\r"]);
+    // Saving happens in the background once everyone has left.
+    const replay = await vi.waitFor(async () => {
+      const replay: RecordingReplay = (
+        await app.inject({ url: `/api/rooms/${room.id}/recording`, headers: ada })
+      ).json();
+      const inputs = replay.events.flatMap((e) => (e.type === "input" ? [e.data] : []));
+      expect(inputs).toEqual(["ls\r", "pwd\r"]);
+      return replay;
+    });
     expect(replay.recording.participants).toEqual([{ name: "Ada", color: "#0090ff" }]);
     expect(replay.snapshot.length).toBeGreaterThan(0);
 

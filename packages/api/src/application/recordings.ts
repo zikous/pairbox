@@ -1,12 +1,19 @@
 import type { Participant, RecordingEvent, RecordingReplay, RoomId } from "@pairbox/shared";
 import type { RoomEvents } from "./events";
 import { RecordingNotFoundError } from "./errors";
-import type { CollaborationObserver, RecordingRepository, RecordingStore } from "./ports";
+import type {
+  CollaborationObserver,
+  RecordingRepository,
+  RecordingStore,
+  WorkspaceRepository,
+} from "./ports";
 
 /** A recording event before its timestamp is added. */
 type Recorded = RecordingEvent extends infer E ? (E extends unknown ? Omit<E, "t"> : never) : never;
 
 interface Session {
+  /** How many channels are open on the room: its document, and each terminal connection. */
+  present: number;
   /** Set once the room's recording is found or created. */
   recording?: { id: string; startedAt: number };
   ready: Promise<void>;
@@ -23,22 +30,29 @@ const base64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64");
 /**
  * Records each room's session, so its owner can replay it: edits with their author, cursors,
  * terminal input and output, runs, and who came and went. A room has one recording: it starts
- * when the room is first opened, pauses while nobody is in it, and closes when the session
- * ends. Events are written in chunks every `flushMs`.
+ * when someone first opens the room (its document or its terminal, whichever comes first),
+ * pauses while nobody is in it, and closes when the session ends. Events are written in chunks
+ * every `flushMs`.
  */
 export class RecordingService implements CollaborationObserver {
   private readonly sessions = new Map<RoomId, Session>();
+  /** Pauses still writing, so resuming continues after their last chunk. */
+  private readonly saving = new Map<RoomId, Promise<void>>();
 
   constructor(
     private readonly repository: RecordingRepository,
     private readonly store: RecordingStore,
+    private readonly workspaces: WorkspaceRepository,
     private readonly events: RoomEvents,
     private readonly flushMs = 5_000,
   ) {}
 
-  opened(roomId: RoomId, state: Uint8Array): void {
-    if (this.sessions.has(roomId)) return;
+  /** Someone opened one of the room's channels. */
+  opened(roomId: RoomId): void {
+    const open = this.sessions.get(roomId);
+    if (open) return void open.present++;
     const session: Session = {
+      present: 1,
       ready: Promise.resolve(),
       buffer: [],
       chunks: 0,
@@ -49,13 +63,14 @@ export class RecordingService implements CollaborationObserver {
         if (event.type === "output" || event.type === "status") this.record(roomId, event);
       }),
     };
-    session.ready = this.resume(roomId, session, state);
+    session.ready = this.resume(roomId, session);
     this.sessions.set(roomId, session);
   }
 
-  /** Nobody is in the room anymore: save what's buffered. The recording resumes if they return. */
+  /** A channel closed. Once nobody is left, save what's buffered; it resumes if they return. */
   closed(roomId: RoomId): void {
-    void this.pause(roomId);
+    const session = this.sessions.get(roomId);
+    if (session && --session.present === 0) void this.pause(roomId);
   }
 
   edited(roomId: RoomId, update: Uint8Array, by: Participant | undefined): void {
@@ -74,11 +89,6 @@ export class RecordingService implements CollaborationObserver {
     if (!session) return;
     if (event.type === "join") session.participants.set(event.by.name, event.by);
     session.buffer.push({ at: Date.now(), event });
-  }
-
-  /** Who took part in each of these rooms' sessions. */
-  participants(roomIds: RoomId[]): Promise<Map<RoomId, Participant[]>> {
-    return this.repository.participantsByRoom(roomIds);
   }
 
   async replay(roomId: RoomId): Promise<RecordingReplay> {
@@ -116,7 +126,8 @@ export class RecordingService implements CollaborationObserver {
     await Promise.all([...this.sessions.keys()].map((roomId) => this.pause(roomId)));
   }
 
-  private async resume(roomId: RoomId, session: Session, state: Uint8Array): Promise<void> {
+  private async resume(roomId: RoomId, session: Session): Promise<void> {
+    await this.saving.get(roomId);
     const existing = await this.repository.getByRoom(roomId);
     if (existing) {
       session.recording = { id: existing.id, startedAt: Date.parse(existing.startedAt) };
@@ -129,12 +140,19 @@ export class RecordingService implements CollaborationObserver {
     const recording = { id: crypto.randomUUID(), roomId, startedAt: new Date() };
     session.recording = { id: recording.id, startedAt: recording.startedAt.getTime() };
     await this.repository.create(recording);
+    // Nobody has opened the room before, so the saved document is the one they'll start from.
+    const state = (await this.workspaces.load(roomId)) ?? new Uint8Array();
     await this.store.saveSnapshot(roomId, recording.id, state);
   }
 
   private async pause(roomId: RoomId): Promise<void> {
     const session = this.stop(roomId);
-    if (session) await this.flush(roomId, session);
+    if (!session) return;
+    const saved = this.flush(roomId, session);
+    this.saving.set(roomId, saved);
+    await saved.finally(() => {
+      if (this.saving.get(roomId) === saved) this.saving.delete(roomId);
+    });
   }
 
   private stop(roomId: RoomId): Session | undefined {

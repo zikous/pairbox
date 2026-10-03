@@ -64,6 +64,7 @@ export function openSession(
     if (!access.allowed) return close(access.code, access.reason);
     if (socket.readyState !== socket.OPEN) return false;
 
+    recordings.opened(roomId);
     if (!access.owner) introduce(access.participant);
     const unsubscribe = events.subscribe(roomId, (event) => {
       // Who is waiting to come in is the owner's business only.
@@ -75,6 +76,7 @@ export function openSession(
       unsubscribe();
       terminals.detach(roomId);
       if (participant) recordings.record(roomId, { type: "leave", by: participant });
+      recordings.closed(roomId);
     };
 
     clock.watch(room);

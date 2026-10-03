@@ -98,7 +98,7 @@ export class YjsCollaboration implements Collaboration {
       unload: () => {
         if (this.docs.get(roomId) === shared) this.destroy(roomId);
       },
-      opened: (state) => observer?.opened(roomId, state),
+      opened: () => observer?.opened(roomId),
       closed: () => observer?.closed(roomId),
       edited: (update, by) => observer?.edited(roomId, update, by),
       presence: (update) => observer?.presence(roomId, update),
@@ -120,7 +120,7 @@ class SharedDoc {
     private readonly hooks: {
       save: (state: Uint8Array) => Promise<void>;
       unload: () => void;
-      opened: (state: Uint8Array) => void;
+      opened: () => void;
       closed: () => void;
       edited: (update: Uint8Array, by: Participant | undefined) => void;
       presence: (update: Uint8Array) => void;
@@ -155,7 +155,7 @@ class SharedDoc {
 
   connect(socket: WebSocket, early: Buffer[]): void {
     clearTimeout(this.unloadTimer);
-    if (this.sockets.size === 0) this.hooks.opened(Y.encodeStateAsUpdate(this.doc));
+    if (this.sockets.size === 0) this.hooks.opened();
     this.sockets.set(socket, new Set());
 
     let alive = true;

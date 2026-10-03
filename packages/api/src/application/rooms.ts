@@ -2,7 +2,10 @@ import {
   normalizeRoomName,
   type CreateRoom,
   type Room,
+  type RoomCounts,
   type RoomId,
+  type RoomListQuery,
+  type RoomPage,
   type Runtime,
 } from "@pairbox/shared";
 import { InvalidInputError, NotRoomOwnerError, RoomNotFoundError } from "./errors";
@@ -40,10 +43,13 @@ export class RoomService {
     private readonly events: RoomEvents,
   ) {}
 
-  /** The user's rooms, soonest first. */
-  async list(ownerId: string): Promise<Room[]> {
-    const rooms = await this.repository.listByOwner(ownerId);
-    return rooms.toSorted((a, b) => a.startsAt.localeCompare(b.startsAt));
+  /** One page of the user's sessions in a tab: live and upcoming soonest first, past latest first. */
+  search(ownerId: string, query: RoomListQuery): Promise<RoomPage> {
+    return this.repository.search(ownerId, query, new Date());
+  }
+
+  counts(ownerId: string): Promise<RoomCounts> {
+    return this.repository.counts(ownerId, new Date());
   }
 
   find(id: RoomId): Promise<OwnedRoom | undefined> {

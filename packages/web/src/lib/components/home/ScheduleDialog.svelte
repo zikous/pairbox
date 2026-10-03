@@ -17,7 +17,7 @@
   import { Input } from "$lib/components/ui/input";
   import { Spinner } from "$lib/components/ui/spinner";
   import * as ToggleGroup from "$lib/components/ui/toggle-group";
-  import { errorMessage } from "$lib/format";
+  import { errorMessage, length } from "$lib/format";
 
   /** Books a session: a name, a runtime, a length, and a free half hour to start in. */
   let { open = $bindable(), onbooked }: { open: boolean; onbooked: (room: Room) => void } =
@@ -33,6 +33,7 @@
   /** "now", or the ISO start of a half-hour slot. */
   let start = $state<string>();
   let availability = $state<Availability>();
+  let loading = $state(false);
   /** Bumped to fetch the free times again. */
   let refresh = $state(0);
   let booking = $state(false);
@@ -54,11 +55,15 @@
     void refresh;
     const from = new Date(`${date}T00:00`);
     const query = [runtime, from, duration] as const;
-    availability = undefined;
-    api.rooms.availability(...query).then(
-      (result) => (availability = result),
-      (error) => toast.error("Couldn't load free times", { description: errorMessage(error) }),
-    );
+    // Keep showing the previous times while the new ones load, so the form doesn't jump.
+    loading = true;
+    api.rooms
+      .availability(...query)
+      .then(
+        (result) => (availability = result),
+        (error) => toast.error("Couldn't load free times", { description: errorMessage(error) }),
+      )
+      .finally(() => (loading = false));
   });
 
   const slots = $derived.by(() => {
@@ -75,7 +80,11 @@
   });
 
   const timeOf = (iso: string) =>
-    new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    new Date(iso).toLocaleTimeString(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    });
 
   async function submit(event: SubmitEvent) {
     event.preventDefault();
@@ -160,7 +169,7 @@
             >
               {#each SESSION_DURATIONS as minutes (minutes)}
                 <ToggleGroup.Item value={String(minutes)} class="px-2.5 font-mono text-xs">
-                  {minutes < 60 ? `${minutes}m` : `${minutes / 60}h`}
+                  {length(minutes * 60_000)}
                 </ToggleGroup.Item>
               {/each}
             </ToggleGroup.Root>
@@ -169,47 +178,58 @@
 
         <Field.Field>
           <Field.Label>Start</Field.Label>
-          {#if !availability}
-            <div class="text-muted-foreground flex items-center gap-2 py-6 text-sm">
-              <Spinner /> Finding free times…
-            </div>
-          {:else}
-            <div class="grid max-h-44 grid-cols-4 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-6">
-              {#if date === today()}
-                <button
-                  type="button"
-                  class={buttonVariants({
-                    variant: start === "now" ? "default" : "outline",
-                    size: "sm",
-                  })}
-                  disabled={!slots.now}
-                  onclick={() => (start = "now")}
-                >
-                  Now
-                </button>
-              {/if}
-              {#each slots.later as slot (slot.startsAt)}
-                <button
-                  type="button"
-                  class={[
-                    buttonVariants({
-                      variant: start === slot.startsAt ? "default" : "outline",
+          <!-- Fixed height: loading, reloading and the grid all take the same room. -->
+          <div class="h-44">
+            {#if !availability}
+              <div
+                class="text-muted-foreground flex h-full items-center justify-center gap-2 text-sm"
+              >
+                <Spinner /> Finding free times…
+              </div>
+            {:else}
+              <div
+                class={[
+                  "grid max-h-full grid-cols-4 gap-1.5 overflow-y-auto pr-1 transition-opacity sm:grid-cols-6",
+                  loading && "pointer-events-none opacity-50",
+                ]}
+              >
+                {#if date === today()}
+                  <button
+                    type="button"
+                    class={buttonVariants({
+                      variant: start === "now" ? "default" : "outline",
                       size: "sm",
-                    }),
-                    "font-mono",
-                  ]}
-                  disabled={!slot.free}
-                  title={slot.free ? undefined : "No sandbox free for this slot"}
-                  onclick={() => (start = slot.startsAt)}
-                >
-                  {timeOf(slot.startsAt)}
-                </button>
-              {/each}
-            </div>
-            <Field.Description
-              >Greyed-out times have no sandbox free for the whole length.</Field.Description
-            >
-          {/if}
+                    })}
+                    disabled={!slots.now}
+                    onclick={() => (start = "now")}
+                  >
+                    Now
+                  </button>
+                {/if}
+                {#each slots.later as slot (slot.startsAt)}
+                  <button
+                    type="button"
+                    class={[
+                      buttonVariants({
+                        variant: start === slot.startsAt ? "default" : "outline",
+                        size: "sm",
+                      }),
+                      "font-mono tabular-nums",
+                      !slot.free && "line-through",
+                    ]}
+                    disabled={!slot.free}
+                    title={slot.free ? undefined : "No sandbox free for this slot"}
+                    onclick={() => (start = slot.startsAt)}
+                  >
+                    {timeOf(slot.startsAt)}
+                  </button>
+                {/each}
+              </div>
+            {/if}
+          </div>
+          <Field.Description
+            >Struck-out times have no sandbox free for the whole length.</Field.Description
+          >
         </Field.Field>
       </Field.Group>
 

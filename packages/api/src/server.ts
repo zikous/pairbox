@@ -32,12 +32,14 @@ export function createServer(options: {
 }) {
   const { db, sandboxes, scheduler, recordingStore, logger } = options;
   const events = new RoomEvents();
+  const workspaces = new PostgresWorkspaceRepository(db);
   const recordings = new RecordingService(
     new PostgresRecordingRepository(db),
     recordingStore,
+    workspaces,
     events,
   );
-  const collaboration = new YjsCollaboration(new PostgresWorkspaceRepository(db), recordings);
+  const collaboration = new YjsCollaboration(workspaces, recordings);
   const terminals = new TerminalService(sandboxes, collaboration, events);
   const lobby = new Lobby(events);
   const clock = new SessionClock(events, lobby, terminals, collaboration, recordings);
