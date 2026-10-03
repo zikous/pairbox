@@ -1,5 +1,4 @@
 import type {
-  Runtime,
   RegisterWorker,
   Reservation,
   Reserve,
@@ -19,13 +18,12 @@ interface TrackedWorker extends RegisterWorker {
 interface Claim {
   id: string;
   roomId: RoomId;
-  runtime: Runtime;
   workerId: string | null;
 }
 
 /**
- * Tracks every worker and hands them out to rooms, one room per worker. When no worker of the
- * right runtime is free, requests wait in a first-come, first-served queue per runtime.
+ * Tracks every worker and hands them out to rooms, one room per worker. Every worker can run
+ * any room. When none is free, requests wait in a first-come, first-served queue.
  * All state can be rebuilt from the workers, which register again if the pool restarts.
  */
 export class WorkerPool {
@@ -63,13 +61,13 @@ export class WorkerPool {
   }
 
   /** Gives the room a free worker, or a place in the queue. Asking twice returns the same claim. */
-  reserve({ roomId, runtime }: Reserve): Reservation {
+  reserve({ roomId }: Reserve): Reservation {
     const existing = [...this.claims.values()].find((claim) => claim.roomId === roomId);
     if (existing) return this.describe(existing);
 
-    const claim: Claim = { id: crypto.randomUUID(), roomId, runtime, workerId: null };
+    const claim: Claim = { id: crypto.randomUUID(), roomId, workerId: null };
     this.claims.set(claim.id, claim);
-    const worker = this.freeWorker(runtime);
+    const worker = this.freeWorker();
     if (worker) this.assign(claim, worker);
     else this.queue.push(claim.id);
     return this.describe(claim);
@@ -103,10 +101,9 @@ export class WorkerPool {
   }
 
   list(): Worker[] {
-    return [...this.workers.values()].map(({ id, url, runtime, state, roomId, lastSeen }) => ({
+    return [...this.workers.values()].map(({ id, url, state, roomId, lastSeen }) => ({
       id,
       url,
-      runtime,
       state,
       roomId,
       lastSeen: new Date(lastSeen).toISOString(),
@@ -132,7 +129,7 @@ export class WorkerPool {
   private assignQueued(): void {
     for (const claimId of [...this.queue]) {
       const claim = this.claims.get(claimId);
-      const worker = claim && this.freeWorker(claim.runtime);
+      const worker = claim && this.freeWorker();
       if (!claim || !worker) continue;
       this.queue = this.queue.filter((id) => id !== claimId);
       this.assign(claim, worker);
@@ -146,16 +143,15 @@ export class WorkerPool {
     worker.reservationId = claim.id;
   }
 
-  private freeWorker(runtime: Runtime): TrackedWorker | undefined {
-    return [...this.workers.values()].find((w) => w.state === "free" && w.runtime === runtime);
+  private freeWorker(): TrackedWorker | undefined {
+    return [...this.workers.values()].find((worker) => worker.state === "free");
   }
 
   private describe(claim: Claim): Reservation {
-    const base = { id: claim.id, roomId: claim.roomId, runtime: claim.runtime };
+    const base = { id: claim.id, roomId: claim.roomId };
     const worker = claim.workerId ? this.workers.get(claim.workerId) : undefined;
     if (worker) return { ...base, status: "reserved", worker: { id: worker.id, url: worker.url } };
 
-    const waiting = this.queue.filter((id) => this.claims.get(id)?.runtime === claim.runtime);
-    return { ...base, status: "queued", position: waiting.indexOf(claim.id) + 1 };
+    return { ...base, status: "queued", position: this.queue.indexOf(claim.id) + 1 };
   }
 }

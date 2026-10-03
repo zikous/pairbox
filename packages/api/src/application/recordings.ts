@@ -5,6 +5,7 @@ import type {
   CollaborationObserver,
   RecordingRepository,
   RecordingStore,
+  RoomRepository,
   WorkspaceRepository,
 } from "./ports";
 
@@ -43,6 +44,7 @@ export class RecordingService implements CollaborationObserver {
     private readonly repository: RecordingRepository,
     private readonly store: RecordingStore,
     private readonly workspaces: WorkspaceRepository,
+    private readonly rooms: RoomRepository,
     private readonly events: RoomEvents,
     private readonly flushMs = 5_000,
   ) {}
@@ -140,9 +142,13 @@ export class RecordingService implements CollaborationObserver {
     const recording = { id: crypto.randomUUID(), roomId, startedAt: new Date() };
     session.recording = { id: recording.id, startedAt: recording.startedAt.getTime() };
     await this.repository.create(recording);
-    // Nobody has opened the room before, so the saved document is the one they'll start from.
-    const state = (await this.workspaces.load(roomId)) ?? new Uint8Array();
-    await this.store.saveSnapshot(roomId, recording.id, state);
+    // Nobody has opened the room before, so the saved document and language are where they start.
+    const [state, room] = await Promise.all([this.workspaces.load(roomId), this.rooms.get(roomId)]);
+    if (room) {
+      const event = { type: "runtime", runtime: room.runtime } as const;
+      session.buffer.unshift({ at: recording.startedAt.getTime(), event });
+    }
+    await this.store.saveSnapshot(roomId, recording.id, state ?? new Uint8Array());
   }
 
   private async pause(roomId: RoomId): Promise<void> {

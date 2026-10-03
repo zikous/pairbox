@@ -41,7 +41,7 @@ export interface RoomsApi {
   /** Ends a session before its slot does. */
   end(id: RoomId): Promise<void>;
   /** Which half hours of the day starting at `from` can still be booked. */
-  availability(runtime: Runtime, from: Date, durationMinutes: number): Promise<Availability>;
+  availability(from: Date, durationMinutes: number): Promise<Availability>;
 }
 
 /** Guests ask to join a room; its owner lets them in or not. */
@@ -63,6 +63,10 @@ export interface RoomSession {
   readonly terminal: TerminalSession;
   /** Tells the room who we are, so our terminal actions are attributed to us. */
   introduce(me: Participant): void;
+  /** The room's language, now and whenever anyone switches it. */
+  onRuntime(listener: (runtime: Runtime) => void): () => void;
+  /** Switches the room's language, for everyone in it. */
+  setRuntime(runtime: Runtime): void;
   /** The owner only: who is waiting to be let in. */
   onJoinRequests(listener: (requests: JoinRequest[]) => void): () => void;
   /** The session is over for everyone: its slot ended, or the room was deleted. */

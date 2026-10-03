@@ -21,6 +21,9 @@ const STARTER_CODE: Record<Runtime, string> = {
     'const name: string = "pairbox";\nconsole.log(`Hello from ${name}!`);\nconsole.log("Edit me, then press Run.");\n',
 };
 
+/** Sessions start in this language; anyone in the room can switch. */
+const DEFAULT_RUNTIME: Runtime = "python";
+
 const ID_ALPHABET = "abcdefghijkmnpqrstuvwxyz23456789";
 /** A session can be booked for a time that started a moment ago (the form took a while). */
 const START_GRACE_MS = 5 * 60_000;
@@ -31,7 +34,7 @@ function newRoomId(): RoomId {
   return Array.from(bytes, (b) => ID_ALPHABET[b % ID_ALPHABET.length]).join("");
 }
 
-/** Rooms are booked sessions: a name, a runtime and a time slot, owned by one user. */
+/** Rooms are booked sessions: a name and a time slot, owned by one user. */
 export class RoomService {
   constructor(
     private readonly repository: RoomRepository,
@@ -81,13 +84,13 @@ export class RoomService {
       id: newRoomId(),
       ownerId,
       name,
-      runtime: input.runtime,
+      runtime: DEFAULT_RUNTIME,
       startsAt: new Date(start).toISOString(),
       endsAt: new Date(start + input.durationMinutes * 60_000).toISOString(),
       createdAt: new Date().toISOString(),
     };
-    const { id: roomId, runtime, startsAt, endsAt } = room;
-    await this.scheduler.book({ roomId, runtime, startsAt, endsAt });
+    const { id: roomId, startsAt, endsAt } = room;
+    await this.scheduler.book({ roomId, startsAt, endsAt });
     try {
       await this.repository.save(room);
       await this.collaboration.create(room.id, STARTER_CODE[room.runtime]);
@@ -96,6 +99,21 @@ export class RoomService {
       throw error;
     }
     return room;
+  }
+
+  /**
+   * Switches the room's language for everyone in it. Code nobody has touched yet becomes the
+   * new language's starter; anything else is kept as is.
+   */
+  async setRuntime(id: RoomId, runtime: Runtime): Promise<void> {
+    const room = await this.get(id);
+    if (room.runtime === runtime) return;
+    await this.repository.save({ ...room, runtime });
+    if (this.collaboration.code(id) === STARTER_CODE[room.runtime]) {
+      this.collaboration.replaceCode(id, STARTER_CODE[runtime]);
+    }
+    this.events.publish(id, { type: "runtime", runtime });
+    this.terminals.setRuntime(id, runtime);
   }
 
   /** Ends a session before its slot does: everyone is disconnected and the slot is freed. */

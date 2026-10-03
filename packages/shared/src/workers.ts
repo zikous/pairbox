@@ -13,7 +13,6 @@ export const RegisterWorkerSchema = z
   .object({
     id: z.string().min(1).max(64),
     url: z.url(),
-    runtime: RuntimeSchema,
   })
   .meta({ id: "RegisterWorker" });
 export type RegisterWorker = z.infer<typeof RegisterWorkerSchema>;
@@ -31,9 +30,7 @@ export type Worker = z.infer<typeof WorkerSchema>;
 // api → pool
 
 /** Body of `POST /reservations`: a room asking for a worker. */
-export const ReserveSchema = z
-  .object({ roomId: RoomIdSchema, runtime: RuntimeSchema })
-  .meta({ id: "Reserve" });
+export const ReserveSchema = z.object({ roomId: RoomIdSchema }).meta({ id: "Reserve" });
 export type Reserve = z.infer<typeof ReserveSchema>;
 
 /** A room's claim on a worker: either waiting in line or holding one. */
@@ -42,7 +39,6 @@ export const ReservationSchema = z
     z.object({
       id: z.string(),
       roomId: RoomIdSchema,
-      runtime: RuntimeSchema,
       status: z.literal("queued"),
       /** 1 means next in line. */
       position: z.number().int().positive(),
@@ -50,7 +46,6 @@ export const ReservationSchema = z
     z.object({
       id: z.string(),
       roomId: RoomIdSchema,
-      runtime: RuntimeSchema,
       status: z.literal("reserved"),
       worker: z.object({ id: z.string(), url: z.url() }),
     }),
@@ -69,10 +64,10 @@ export const WorkerCommandSchema = z.discriminatedUnion("type", [
     cols: z.number().int().min(2),
     rows: z.number().int().min(1),
   }),
-  /** Saves the room's code into the workspace. */
-  z.object({ type: z.literal("write"), code: z.string() }),
+  /** Saves the room's code into the workspace, in the file of its language. */
+  z.object({ type: z.literal("write"), code: z.string(), runtime: RuntimeSchema }),
   /** Saves the code, then runs it in the shell. */
-  z.object({ type: z.literal("run"), code: z.string() }),
+  z.object({ type: z.literal("run"), code: z.string(), runtime: RuntimeSchema }),
   /** Interrupts the running program (ctrl-c). */
   z.object({ type: z.literal("stop") }),
 ]);

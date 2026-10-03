@@ -6,6 +6,7 @@ import {
   type Participant,
   type Room,
   type RunStatus,
+  type Runtime,
   type JoinRequest,
   type SandboxState,
   type ServerMessage,
@@ -40,11 +41,14 @@ export async function joinRoom(room: Room, me: Participant, ticket?: string): Pr
 
   const joinRequests = new Listeners<JoinRequest[]>();
   const ended = new Listeners<"time" | "deleted">();
+  let runtime = room.runtime;
+  const runtimeChanged = new Listeners<Runtime>();
   const terminal = new RoomTerminal(send);
 
   socket.addEventListener("message", (event: MessageEvent<string>) => {
     const message = JSON.parse(event.data) as ServerMessage;
-    if (message.type === "join_requests") joinRequests.emit(message.requests);
+    if (message.type === "runtime") runtimeChanged.emit((runtime = message.runtime));
+    else if (message.type === "join_requests") joinRequests.emit(message.requests);
     else if (message.type === "session_ended") ended.emit("time");
     else if (message.type === "room_deleted") ended.emit("deleted");
     else terminal.receive(message);
@@ -69,6 +73,11 @@ export async function joinRoom(room: Room, me: Participant, ticket?: string): Pr
     awareness: provider.awareness,
     terminal,
     introduce: (participant) => send({ type: "hello", participant }),
+    onRuntime: (listener) => {
+      listener(runtime);
+      return runtimeChanged.add(listener);
+    },
+    setRuntime: (next) => send({ type: "set_runtime", runtime: next }),
     onJoinRequests: (listener) => joinRequests.add(listener),
     onEnded: (listener) => ended.add(listener),
     leave,

@@ -21,7 +21,7 @@ export class WorkerSandboxes implements Sandboxes {
   ) {}
 
   async open(
-    request: { roomId: RoomId; runtime: Runtime },
+    request: { roomId: RoomId },
     options: { onWaiting: (position: number) => void; signal: AbortSignal },
   ): Promise<SandboxSession> {
     let reservation = await this.pool<Reservation>("POST", "/reservations", request);
@@ -95,8 +95,8 @@ class WorkerSession implements SandboxSession {
 
   input = (data: string) => this.send({ type: "input", data });
   resize = (cols: number, rows: number) => this.send({ type: "resize", cols, rows });
-  write = (code: string) => this.send({ type: "write", code });
-  run = (code: string) => this.send({ type: "run", code });
+  write = (code: string, runtime: Runtime) => this.send({ type: "write", code, runtime });
+  run = (code: string, runtime: Runtime) => this.send({ type: "run", code, runtime });
   stop = () => this.send({ type: "stop" });
 
   async close() {

@@ -1,7 +1,5 @@
 <script lang="ts">
   import { LoaderCircle, Search, X } from "@lucide/svelte";
-  import { RUNTIMES, isRuntime } from "@pairbox/shared";
-  import RuntimeDot from "$lib/components/shared/RuntimeDot.svelte";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import * as Select from "$lib/components/ui/select";
@@ -35,28 +33,6 @@
     <Select.Content>
       {#each periods as option (option.id)}
         <Select.Item value={option.id}>{option.label}</Select.Item>
-      {/each}
-    </Select.Content>
-  </Select.Root>
-
-  <Select.Root
-    type="single"
-    value={list.runtime}
-    onValueChange={(v) => list.setRuntime(isRuntime(v) ? v : "all")}
-  >
-    <Select.Trigger class="w-40" aria-label="Runtime">
-      <span class="flex items-center gap-1.5">
-        {#if list.runtime === "all"}All runtimes{:else}
-          <RuntimeDot runtime={list.runtime} />{RUNTIMES[list.runtime].label}
-        {/if}
-      </span>
-    </Select.Trigger>
-    <Select.Content>
-      <Select.Item value="all">All runtimes</Select.Item>
-      {#each Object.entries(RUNTIMES) as [id, { label }] (id)}
-        <Select.Item value={id}>
-          {#if isRuntime(id)}<RuntimeDot runtime={id} />{/if}{label}
-        </Select.Item>
       {/each}
     </Select.Content>
   </Select.Root>

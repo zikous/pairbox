@@ -25,6 +25,7 @@
   import Editor from "./Editor.svelte";
   import EndSessionButton from "./EndSessionButton.svelte";
   import JoinRequests from "./JoinRequests.svelte";
+  import LanguagePicker from "./LanguagePicker.svelte";
   import PaneDivider from "./PaneDivider.svelte";
   import PaneHeader from "./PaneHeader.svelte";
   import Participants, { type Person } from "./Participants.svelte";
@@ -37,7 +38,8 @@
 
   /** The live room: editor and terminal side by side, inside the room frame. */
   let { room, session }: { room: RoomView; session: RoomSession } = $props();
-  const runtime = $derived(room.runtime);
+  // Starts as the room's, then follows switches made in the room.
+  let runtime = $derived(room.runtime);
 
   let requests = $state<JoinRequest[]>([]);
   let status = $state<RunStatus>({ state: "idle" });
@@ -77,6 +79,7 @@
       }),
       session.terminal.onStatus((next) => (status = next)),
       session.terminal.onSandbox((next) => (sandbox = next)),
+      session.onRuntime((next) => (runtime = next)),
     ];
 
     return () => {
@@ -156,8 +159,7 @@
           <RuntimeDot {runtime} />{RUNTIMES[runtime].file}
         {/snippet}
         {#snippet actions()}
-          <span class="text-muted-foreground px-2 font-mono text-xs">{RUNTIMES[runtime].label}</span
-          >
+          <LanguagePicker value={runtime} onchange={(next) => session.setRuntime(next)} />
         {/snippet}
       </PaneHeader>
       <div class="min-h-0 flex-1">
@@ -211,7 +213,7 @@
       </PaneHeader>
       <div class="relative min-h-0 flex-1">
         <Terminal bind:this={terminal} session={session.terminal} {dark} />
-        <SandboxOverlay {sandbox} {runtime} onreset={() => session.terminal.reset()} />
+        <SandboxOverlay {sandbox} onreset={() => session.terminal.reset()} />
       </div>
     </Resizable.Pane>
   </Resizable.PaneGroup>

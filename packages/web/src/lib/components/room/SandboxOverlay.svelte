@@ -1,19 +1,17 @@
 <script lang="ts">
   import { fade } from "svelte/transition";
   import { RotateCcw } from "@lucide/svelte";
-  import { RUNTIMES, type Runtime, type SandboxState } from "@pairbox/shared";
+  import type { SandboxState } from "@pairbox/shared";
   import { Button } from "$lib/components/ui/button";
   import { Spinner } from "$lib/components/ui/spinner";
 
   /** Covers the terminal while the room has no machine: starting, waiting in line, or lost. */
   interface Props {
     sandbox: SandboxState;
-    runtime: Runtime;
     onreset: () => void;
   }
 
-  let { sandbox, runtime, onreset }: Props = $props();
-  const label = $derived(RUNTIMES[runtime].label);
+  let { sandbox, onreset }: Props = $props();
 </script>
 
 {#if sandbox.state !== "ready"}
@@ -29,12 +27,12 @@
       {:else}
         <Spinner class="text-primary size-5" />
         {#if sandbox.state === "waiting"}
-          <p class="text-sm font-medium">Waiting for a free {label} sandbox</p>
+          <p class="text-sm font-medium">Waiting for a free sandbox</p>
           <p class="text-muted-foreground font-mono text-xs">
             {sandbox.position === 1 ? "You're next" : `#${sandbox.position} in line`}
           </p>
         {:else}
-          <p class="text-sm font-medium">Starting a {label} sandbox…</p>
+          <p class="text-sm font-medium">Starting a sandbox…</p>
         {/if}
       {/if}
     </div>

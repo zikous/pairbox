@@ -1,10 +1,10 @@
-import type { Runtime, Worker } from "@pairbox/shared";
+import type { Worker } from "@pairbox/shared";
 import { internalHeaders } from "@pairbox/service";
 import type { Capacity } from "../application/ports";
 
 const CACHE_MS = 5_000;
 
-/** Capacity = the workers the pool currently knows about, per runtime. */
+/** Capacity = the workers the pool currently knows about. */
 export class PoolCapacity implements Capacity {
   private cached?: { at: number; workers: Promise<Worker[]> };
 
@@ -13,12 +13,11 @@ export class PoolCapacity implements Capacity {
     private readonly internalSecret: string,
   ) {}
 
-  async of(runtime: Runtime): Promise<number> {
-    const workers = await this.workers();
-    return workers.filter((worker) => worker.runtime === runtime).length;
+  async workers(): Promise<number> {
+    return (await this.list()).length;
   }
 
-  private workers(): Promise<Worker[]> {
+  private list(): Promise<Worker[]> {
     if (!this.cached || Date.now() - this.cached.at > CACHE_MS) {
       const workers = fetch(`${this.poolUrl}/workers`, {
         headers: internalHeaders(this.internalSecret),

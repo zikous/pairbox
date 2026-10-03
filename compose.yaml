@@ -120,18 +120,12 @@ services:
     depends_on: [web]
     networks: [backend]
 
-  worker-python:
+  # Every worker runs every language. As many sessions can run at once as there are workers.
+  worker:
     <<: *worker
-    build: { context: ., dockerfile: packages/worker/Dockerfile, target: python }
+    build: { context: ., dockerfile: packages/worker/Dockerfile }
     deploy:
-      replicas: 3
-      resources: { limits: { cpus: "0.5", memory: 512M, pids: 256 } }
-
-  worker-typescript:
-    <<: *worker
-    build: { context: ., dockerfile: packages/worker/Dockerfile, target: typescript }
-    deploy:
-      replicas: 2
+      replicas: 5
       resources: { limits: { cpus: "0.5", memory: 512M, pids: 256 } }
 
 networks:

@@ -1,16 +1,12 @@
 <script lang="ts">
   import { toast } from "svelte-sonner";
   import {
-    RUNTIMES,
     SESSION_DURATIONS,
-    isRuntime,
     normalizeRoomName,
     type Availability,
     type Room,
-    type Runtime,
   } from "@pairbox/shared";
   import { api, HttpError } from "$lib/api";
-  import RuntimeDot from "$lib/components/shared/RuntimeDot.svelte";
   import { Button, buttonVariants } from "$lib/components/ui/button";
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Field from "$lib/components/ui/field";
@@ -19,7 +15,10 @@
   import * as ToggleGroup from "$lib/components/ui/toggle-group";
   import { errorMessage, length } from "$lib/format";
 
-  /** Books a session: a name, a runtime, a length, and a free half hour to start in. */
+  /**
+   * Books a session: a name, a length, and a free half hour to start in. The language is
+   * picked in the room, and can be switched there at any time.
+   */
   let { open = $bindable(), onbooked }: { open: boolean; onbooked: (room: Room) => void } =
     $props();
 
@@ -27,7 +26,6 @@
   const today = () => new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local time
 
   let name = $state("");
-  let runtime = $state<Runtime>("python");
   let duration = $state<number>(60);
   let date = $state(today());
   /** "now", or the ISO start of a half-hour slot. */
@@ -43,18 +41,17 @@
   $effect(() => {
     if (!open) return;
     name = "";
-    runtime = "python";
     duration = 60;
     date = today();
     start = undefined;
   });
 
-  // Free slots for the chosen runtime, day and length.
+  // Free slots for the chosen day and length.
   $effect(() => {
     if (!open) return;
     void refresh;
     const from = new Date(`${date}T00:00`);
-    const query = [runtime, from, duration] as const;
+    const query = [from, duration] as const;
     // Keep showing the previous times while the new ones load, so the form doesn't jump.
     loading = true;
     api.rooms
@@ -94,7 +91,6 @@
       const startsAt = start === "now" ? new Date().toISOString() : start;
       const room = await api.rooms.create({
         name: validName,
-        runtime,
         startsAt,
         durationMinutes: duration as (typeof SESSION_DURATIONS)[number],
       });
@@ -133,25 +129,6 @@
             placeholder="Frontend interview · Ada"
             maxlength={60}
           />
-        </Field.Field>
-
-        <Field.Field>
-          <Field.Label>Runtime</Field.Label>
-          <ToggleGroup.Root
-            type="single"
-            variant="outline"
-            class="w-full"
-            value={runtime}
-            onValueChange={(value) => {
-              if (value && isRuntime(value)) runtime = value;
-            }}
-          >
-            {#each Object.entries(RUNTIMES) as [id, { label }] (id)}
-              <ToggleGroup.Item value={id} class="flex-1 gap-2">
-                {#if isRuntime(id)}<RuntimeDot runtime={id} />{/if}{label}
-              </ToggleGroup.Item>
-            {/each}
-          </ToggleGroup.Root>
         </Field.Field>
 
         <div class="grid grid-cols-[1fr_auto] gap-4">

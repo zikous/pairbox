@@ -1,6 +1,5 @@
 import Fastify, { type FastifyServerOptions } from "fastify";
 import websocket from "@fastify/websocket";
-import type { Runtime } from "@pairbox/shared";
 import { requireInternal } from "@pairbox/service";
 import { cleanMachine } from "./machine";
 import { openTerminal, sandboxUser } from "./terminal";
@@ -13,7 +12,6 @@ import { openTerminal, sandboxUser } from "./terminal";
  */
 export async function createServer(options: {
   internalSecret: string;
-  runtime: Runtime;
   sandboxUser: string;
   workspace: string;
   writableDirs: string[];
@@ -32,7 +30,6 @@ export async function createServer(options: {
 
   app.get("/terminal", { websocket: true }, (socket, request) =>
     openTerminal(socket, {
-      runtime: options.runtime,
       workspace: options.workspace,
       user,
       log: (error) => request.log.warn({ err: error }, "terminal command failed"),

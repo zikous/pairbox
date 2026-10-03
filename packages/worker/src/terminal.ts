@@ -43,14 +43,12 @@ export function sandboxUser(name: string): SandboxUser {
 export function openTerminal(
   socket: WebSocket,
   options: {
-    runtime: Runtime;
     workspace: string;
     user: SandboxUser;
     log: (error: unknown) => void;
   },
 ) {
-  const { runtime, workspace, user, log } = options;
-  const { file, command } = RUNTIMES[runtime];
+  const { workspace, user, log } = options;
   const send = (event: WorkerEvent) => socket.send(JSON.stringify(event));
 
   let status: RunStatus = { state: "idle" };
@@ -99,8 +97,8 @@ export function openTerminal(
     return pty;
   }
 
-  async function saveCode(code: string) {
-    const path = join(workspace, file);
+  async function saveCode(code: string, runtime: Runtime) {
+    const path = join(workspace, RUNTIMES[runtime].file);
     await writeFile(path, code);
     if (user.ids) await chown(path, user.ids.uid, user.ids.gid);
   }
@@ -112,13 +110,13 @@ export function openTerminal(
       case "resize":
         return shell.resize(message.cols, message.rows);
       case "write":
-        return saveCode(message.code);
+        return saveCode(message.code, message.runtime);
       case "run":
         if (status.state === "running") return;
-        await saveCode(message.code);
+        await saveCode(message.code, message.runtime);
         setStatus({ state: "running", startedAt: performance.now() });
         // ctrl-u clears anything half-typed on the prompt first.
-        return shell.write(`\x15${command}\r`);
+        return shell.write(`\x15${RUNTIMES[message.runtime].command}\r`);
       case "stop":
         return shell.write("\x03");
     }

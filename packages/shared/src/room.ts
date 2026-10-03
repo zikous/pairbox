@@ -19,6 +19,7 @@ export const RoomSchema = z
   .object({
     id: RoomIdSchema,
     name: z.string(),
+    /** The language the code is in right now. Anyone in the room can switch it. */
     runtime: RuntimeSchema,
     startsAt: DateTimeSchema,
     endsAt: DateTimeSchema,
@@ -43,7 +44,6 @@ export type RoomView = z.infer<typeof RoomViewSchema>;
 export const CreateRoomSchema = z
   .object({
     name: z.string().trim().min(1).max(ROOM_NAME_MAX),
-    runtime: RuntimeSchema,
     startsAt: DateTimeSchema,
     durationMinutes: z.union(SESSION_DURATIONS.map((m) => z.literal(m))),
   })
@@ -90,7 +90,6 @@ export const RoomListQuerySchema = z.object({
   tab: SessionTabSchema,
   /** Matches the session's name or a participant's name. */
   q: z.string().trim().max(100).optional(),
-  runtime: RuntimeSchema.optional(),
   /** Only sessions starting at or after / before these moments. */
   from: DateTimeSchema.optional(),
   to: DateTimeSchema.optional(),

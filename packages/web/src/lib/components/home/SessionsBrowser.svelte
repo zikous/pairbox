@@ -27,7 +27,7 @@
         {#if list.filtered}
           <Empty.Media variant="icon"><SearchX /></Empty.Media>
           <Empty.Title>No sessions match</Empty.Title>
-          <Empty.Description>Try another search, runtime or period.</Empty.Description>
+          <Empty.Description>Try another search or period.</Empty.Description>
         {:else}
           {@render empty()}
         {/if}

@@ -1,6 +1,6 @@
 import { hostname, networkInterfaces } from "node:os";
 import { z } from "zod";
-import { readEnv, RuntimeSchema } from "@pairbox/shared";
+import { readEnv } from "@pairbox/shared";
 
 /** The address other services use to reach this worker: its first network IPv4. */
 function ownAddress(): string {
@@ -14,7 +14,6 @@ export const config = readEnv(
   z
     .object({
       WORKER_PORT: z.coerce.number().int(),
-      WORKER_RUNTIME: RuntimeSchema,
       WORKER_ID: z.string().default(hostname()),
       WORKER_URL: z.url().optional(),
       POOL_URL: z.url(),
@@ -30,7 +29,6 @@ export const config = readEnv(
       url: env.WORKER_URL ?? `http://${ownAddress()}:${env.WORKER_PORT}`,
       host: "0.0.0.0",
       port: env.WORKER_PORT,
-      runtime: env.WORKER_RUNTIME,
       poolUrl: env.POOL_URL,
       internalSecret: env.INTERNAL_SECRET,
       sandboxUser: env.SANDBOX_USER,

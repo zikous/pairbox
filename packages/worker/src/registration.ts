@@ -26,7 +26,7 @@ export function stayRegistered(options: {
           body: JSON.stringify(worker),
         });
         registered = response.ok;
-        if (registered) log(`registered with the pool as ${worker.id} (${worker.runtime})`);
+        if (registered) log(`registered with the pool as ${worker.id}`);
         return;
       }
       const response = await fetch(`${poolUrl}/workers/${worker.id}/heartbeat`, {

@@ -1,8 +1,9 @@
 import { z } from "zod";
 
 /**
- * What a room's code runs on: the tools installed on its worker. Each runtime has the file the
- * room's code is saved to, and the command that runs it.
+ * The languages a room's code can be written in. Every worker has all of them installed, and a
+ * room can switch between them at any time. Each has the file the code is saved to, and the
+ * command that runs it.
  */
 export const RUNTIMES = {
   python: { label: "Python", file: "main.py", command: "python3 main.py" },

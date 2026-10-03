@@ -89,8 +89,8 @@ export const roomsRoutes: FastifyPluginAsyncZod<{
       },
     },
     (request) => {
-      const { runtime, from, durationMinutes } = request.query;
-      return scheduler.availability(runtime, new Date(from), durationMinutes);
+      const { from, durationMinutes } = request.query;
+      return scheduler.availability(new Date(from), durationMinutes);
     },
   );
 

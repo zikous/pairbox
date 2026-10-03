@@ -1,7 +1,6 @@
 <script lang="ts">
   import { fade } from "svelte/transition";
-  import { RUNTIMES, normalizeDisplayName, type Room } from "@pairbox/shared";
-  import RuntimeDot from "$lib/components/shared/RuntimeDot.svelte";
+  import { normalizeDisplayName, type Room } from "@pairbox/shared";
   import { Button } from "$lib/components/ui/button";
   import * as Field from "$lib/components/ui/field";
   import { Input } from "$lib/components/ui/input";
@@ -36,10 +35,7 @@
     <div class="space-y-1.5 border-b p-5">
       <p class="label-mono">Joining</p>
       <h2 class="text-lg font-semibold tracking-tight">{room.name}</h2>
-      <p class="text-muted-foreground flex items-center gap-2 font-mono text-xs">
-        <RuntimeDot runtime={room.runtime} />{RUNTIMES[room.runtime].file}
-        <span>·</span>{room.id}
-      </p>
+      <p class="text-muted-foreground font-mono text-xs">{room.id}</p>
     </div>
     <div class="space-y-5 p-5">
       <Field.Field>

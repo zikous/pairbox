@@ -60,6 +60,8 @@ export interface Collaboration {
   create(roomId: RoomId, initialCode: string): Promise<void>;
   /** The room's current code, or "" when nobody has it open. */
   code(roomId: RoomId): string;
+  /** Replaces the code of a room someone has open, for everyone in it. */
+  replaceCode(roomId: RoomId, code: string): void;
   /** Saves the document and disconnects everyone: the session is over. */
   end(roomId: RoomId): Promise<void>;
   destroy(roomId: RoomId): void;
@@ -70,7 +72,7 @@ export interface Scheduler {
   /** Throws SlotTakenError when no worker is free for the whole slot. */
   book(booking: Booking): Promise<void>;
   cancel(roomId: RoomId): Promise<void>;
-  availability(runtime: Runtime, from: Date, durationMinutes: number): Promise<Availability>;
+  availability(from: Date, durationMinutes: number): Promise<Availability>;
 }
 
 /** Hands out isolated machines (workers) to rooms. */
@@ -80,7 +82,7 @@ export interface Sandboxes {
    * reporting the room's position. Aborting gives up the place in line.
    */
   open(
-    request: { roomId: RoomId; runtime: Runtime },
+    request: { roomId: RoomId },
     options: { onWaiting: (position: number) => void; signal: AbortSignal },
   ): Promise<SandboxSession>;
 }
@@ -93,10 +95,10 @@ export interface SandboxSession {
   onLost(listener: () => void): void;
   input(data: string): void;
   resize(cols: number, rows: number): void;
-  /** Saves the code into the machine's workspace. */
-  write(code: string): void;
+  /** Saves the code into the machine's workspace, in the file of its language. */
+  write(code: string, runtime: Runtime): void;
   /** Saves the code and runs it in the shell. */
-  run(code: string): void;
+  run(code: string, runtime: Runtime): void;
   stop(): void;
   close(): Promise<void>;
 }

@@ -5,7 +5,7 @@ I vibe-coded a CoderPad because I was bored. Share a link, write code together i
 - Schedule sessions (30 min to 3 h); a sandbox is guaranteed for the whole slot
 - Guests join by link and wait in a lobby until the host lets them in
 - Live collaborative editor (CodeMirror + Yjs) with cursors and presence
-- A shared terminal per room, on a real `bash` in an isolated worker (Python or TypeScript)
+- A shared terminal per room, on a real `bash` in an isolated worker; switch between Python and TypeScript at any time
 - Every session is recorded and can be replayed: code, cursors, terminal, who did what
 - Accounts (email and password) for hosts; invite links that work from any network
 
@@ -30,8 +30,8 @@ flowchart LR
 | **web** | nginx serving the Svelte app, forwarding `/api` and `/ws` to the api |
 | **api** | Accounts, sessions, the lobby, the shared documents, recordings, and relaying each room's terminal to its worker |
 | **scheduler** | The calendar: books sessions without ever booking more at once than there are workers |
-| **pool** | Knows every worker (free, reserved, cleaning) and hands them to rooms, with a queue per runtime |
-| **worker** | One room at a time: a real shell as an unprivileged user, cleaned between rooms. A container here; could be a VM |
+| **pool** | Knows every worker (free, reserved, cleaning) and hands them to rooms, with a queue when all are busy |
+| **worker** | One room at a time, with every language installed: a real shell as an unprivileged user, cleaned between rooms. A container here; could be a VM |
 | **db** | Postgres: users, rooms, documents, bookings, the recordings index |
 | **storage** | S3-compatible object storage (SeaweedFS) for recordings |
 | **tunnel** | Optional Cloudflare quick tunnel, so invite links work from anywhere |

@@ -50,6 +50,15 @@ export class YjsCollaboration implements Collaboration {
     return this.docs.get(roomId)?.doc.getText("code").toString() ?? "";
   }
 
+  replaceCode(roomId: RoomId, code: string): void {
+    const doc = this.docs.get(roomId)?.doc;
+    const text = doc?.getText("code");
+    doc?.transact(() => {
+      text?.delete(0, text.length);
+      text?.insert(0, code);
+    });
+  }
+
   async end(roomId: RoomId): Promise<void> {
     const shared = this.docs.get(roomId);
     if (!shared) return;

@@ -1,8 +1,7 @@
 <script lang="ts">
   import { History } from "@lucide/svelte";
-  import { RUNTIMES, type Room, type RoomSummary } from "@pairbox/shared";
+  import type { Room, RoomSummary } from "@pairbox/shared";
   import CopyButton from "$lib/components/shared/CopyButton.svelte";
-  import RuntimeDot from "$lib/components/shared/RuntimeDot.svelte";
   import { Button, buttonVariants } from "$lib/components/ui/button";
   import { Skeleton } from "$lib/components/ui/skeleton";
   import * as Table from "$lib/components/ui/table";
@@ -34,7 +33,6 @@
         <Table.Head class="pl-4">Session</Table.Head>
         <Table.Head class="w-48">When</Table.Head>
         <Table.Head class="hidden w-24 lg:table-cell">Length</Table.Head>
-        <Table.Head class="hidden w-36 md:table-cell">Runtime</Table.Head>
         <Table.Head class="hidden w-56 sm:table-cell">
           {tab === "past" ? "Participants" : "Starts"}
         </Table.Head>
@@ -48,7 +46,6 @@
             <Table.Cell class="pl-4"><Skeleton class="h-4 w-48" /></Table.Cell>
             <Table.Cell><Skeleton class="h-4 w-32" /></Table.Cell>
             <Table.Cell class="hidden lg:table-cell"><Skeleton class="h-4 w-10" /></Table.Cell>
-            <Table.Cell class="hidden md:table-cell"><Skeleton class="h-4 w-20" /></Table.Cell>
             <Table.Cell class="hidden sm:table-cell"><Skeleton class="h-4 w-24" /></Table.Cell>
             <Table.Cell class="pr-4"><Skeleton class="ml-auto h-7 w-24" /></Table.Cell>
           </Table.Row>
@@ -67,11 +64,6 @@
             </Table.Cell>
             <Table.Cell class="text-muted-foreground hidden font-mono text-xs lg:table-cell">
               {length(duration(room))}
-            </Table.Cell>
-            <Table.Cell class="hidden md:table-cell">
-              <span class="flex items-center gap-1.5">
-                <RuntimeDot runtime={room.runtime} />{RUNTIMES[room.runtime].label}
-              </span>
             </Table.Cell>
             <Table.Cell class="hidden sm:table-cell">
               {#if tab === "past"}

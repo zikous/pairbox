@@ -30,8 +30,8 @@ const testSandboxes: Sandboxes = {
       input: (data) => onOutput(data),
       resize: () => {},
       write: () => {},
-      run: (code) => {
-        onOutput(`ran: ${code.split("\n")[0]}\r\n`);
+      run: (code, runtime) => {
+        onOutput(`ran ${runtime}: ${code.split("\n")[0]}\r\n`);
         onStatus({ state: "exited", exitCode: 0, durationMs: 1 });
       },
       stop: () => {},
@@ -57,14 +57,15 @@ function memoryRecordingStore(): RecordingStore {
   };
 }
 
-/** A calendar with one worker per runtime: overlapping bookings of a runtime are refused. */
-function oneWorkerScheduler(): Scheduler {
+/** A calendar with two workers: a third overlapping booking is refused. */
+function twoWorkerScheduler(): Scheduler {
   const bookings: Booking[] = [];
-  const overlaps = (a: Booking, b: Booking) =>
-    a.runtime === b.runtime && a.startsAt < b.endsAt && b.startsAt < a.endsAt;
+  const overlaps = (a: Booking, b: Booking) => a.startsAt < b.endsAt && b.startsAt < a.endsAt;
   return {
     async book(booking) {
-      if (bookings.some((other) => overlaps(other, booking))) throw new SlotTakenError();
+      if (bookings.filter((other) => overlaps(other, booking)).length >= 2) {
+        throw new SlotTakenError();
+      }
       bookings.push(booking);
     },
     async cancel(roomId) {
@@ -76,7 +77,7 @@ function oneWorkerScheduler(): Scheduler {
 }
 
 const recordingStore = memoryRecordingStore();
-let scheduler = oneWorkerScheduler();
+let scheduler = twoWorkerScheduler();
 let database: Awaited<ReturnType<typeof connectDatabase>>;
 let app: Awaited<ReturnType<typeof createServer>>;
 const start = async () =>
@@ -93,7 +94,7 @@ beforeAll(async () => {
 afterAll(() => database.close());
 beforeEach(async () => {
   await database.db.execute(sql`truncate users, templates cascade`);
-  scheduler = oneWorkerScheduler();
+  scheduler = twoWorkerScheduler();
   await start();
 });
 afterEach(() => app.close());
@@ -114,13 +115,13 @@ async function signUp(email = "ada@example.com", password = "correct horse") {
 /** Books a room starting now (or `inMinutes` from now) for an hour. */
 async function createRoom(
   headers: { cookie: string },
-  { name = "Interview", runtime = "python", inMinutes = 0 } = {},
+  { name = "Interview", inMinutes = 0 } = {},
 ): Promise<Room> {
   const response = await app.inject({
     method: "POST",
     url: "/api/rooms",
     headers,
-    payload: { name, runtime, startsAt: minutesFromNow(inMinutes), durationMinutes: 60 },
+    payload: { name, startsAt: minutesFromNow(inMinutes), durationMinutes: 60 },
   });
   expect(response.statusCode).toBe(201);
   return response.json();
@@ -204,16 +205,16 @@ describe("rooms", () => {
   it("refuses a slot when no sandbox is free for it", async () => {
     const headers = await signUp();
     await createRoom(headers);
-    const book = (runtime: string, inMinutes: number) =>
+    const book = (inMinutes: number) =>
       app.inject({
         method: "POST",
         url: "/api/rooms",
         headers,
-        payload: { name: "x", runtime, startsAt: minutesFromNow(inMinutes), durationMinutes: 60 },
+        payload: { name: "x", startsAt: minutesFromNow(inMinutes), durationMinutes: 60 },
       });
-    expect((await book("python", 30)).statusCode).toBe(409); // overlaps the first
-    expect((await book("python", 60)).statusCode).toBe(201); // right after it
-    expect((await book("typescript", 0)).statusCode).toBe(201); // another runtime's worker
+    expect((await book(0)).statusCode).toBe(201); // on the second worker
+    expect((await book(30)).statusCode).toBe(409); // both are busy then
+    expect((await book(60)).statusCode).toBe(201); // right after the first two
   });
 
   it("keeps each user's sessions to themselves", async () => {
@@ -236,7 +237,6 @@ describe("rooms", () => {
     const live = await createRoom(headers, { name: "Live one" });
     const soon = await createRoom(headers, {
       name: "Pairing 50%",
-      runtime: "typescript", // the python worker is taken by the first one
       inMinutes: 5, // the owner can open it early
     });
     const later = await createRoom(headers, { name: "Later", inMinutes: 120 });
@@ -271,12 +271,10 @@ describe("rooms", () => {
       app.inject({ method: "POST", url: "/api/rooms", headers, payload });
     const valid = {
       name: "x",
-      runtime: "python",
       startsAt: minutesFromNow(0),
       durationMinutes: 60,
     };
     expect((await bad({ ...valid, name: "   " })).statusCode).toBe(400);
-    expect((await bad({ ...valid, runtime: "cobol" })).statusCode).toBe(400);
     expect((await bad({ ...valid, durationMinutes: 45 })).statusCode).toBe(400);
     expect((await bad({ ...valid, startsAt: minutesFromNow(-60) })).statusCode).toBe(400);
     expect((await app.inject({ url: "/api/rooms/NOT_AN_ID" })).statusCode).toBe(400);
@@ -365,8 +363,29 @@ describe("session socket", () => {
 
     await waitFor((m) => m.type === "sandbox" && m.sandbox.state === "ready");
     socket.send(JSON.stringify({ type: "run" }));
-    await waitFor((m) => m.type === "output" && m.data.startsWith("ran: name ="));
+    await waitFor((m) => m.type === "output" && m.data.startsWith("ran python: name ="));
     await waitFor((m) => m.type === "status" && m.status.state === "exited");
+    socket.terminate();
+  });
+
+  it("switches the room's language for everyone, starter code included", async () => {
+    const owner = await signUp();
+    const room = await createRoom(owner);
+    const socket = await connect(`/ws/rooms/${room.id}/session`, owner);
+    const messages: ServerMessage[] = [];
+    socket.on("message", (data) => messages.push(JSON.parse(data.toString())));
+    const waitFor = (predicate: (m: ServerMessage) => boolean) =>
+      expect.poll(() => messages.some(predicate), { timeout: 2000 }).toBe(true);
+
+    await waitFor((m) => m.type === "runtime" && m.runtime === "python");
+    await waitFor((m) => m.type === "sandbox" && m.sandbox.state === "ready");
+    socket.send(JSON.stringify({ type: "set_runtime", runtime: "typescript" }));
+    await waitFor((m) => m.type === "runtime" && m.runtime === "typescript");
+    socket.send(JSON.stringify({ type: "run" }));
+    await waitFor((m) => m.type === "output" && m.data.startsWith("ran typescript: const name"));
+
+    const saved = await app.inject({ url: `/api/rooms/${room.id}` });
+    expect(saved.json()).toMatchObject({ runtime: "typescript" });
     socket.terminate();
   });
 
@@ -405,6 +424,7 @@ describe("recordings", () => {
       expect(inputs).toEqual(["ls\r", "pwd\r"]);
       return replay;
     });
+    expect(replay.events[0]).toEqual({ t: 0, type: "runtime", runtime: "python" }); // where it starts
     expect(replay.recording.participants).toEqual([{ name: "Ada", color: "#0090ff" }]);
     expect(replay.snapshot.length).toBeGreaterThan(0);
 

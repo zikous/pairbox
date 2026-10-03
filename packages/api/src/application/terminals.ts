@@ -5,6 +5,7 @@ import type { Collaboration, Sandboxes, SandboxSession } from "./ports";
 const SCROLLBACK_MAX = 64_000;
 
 interface Terminal {
+  /** The room's language: which file the code is saved to, and how it's run. */
   runtime: Runtime;
   sandbox: SandboxState;
   session?: SandboxSession;
@@ -57,7 +58,16 @@ export class TerminalService {
   }
 
   run(roomId: RoomId): void {
-    this.terminals.get(roomId)?.session?.run(this.collaboration.code(roomId));
+    const terminal = this.terminals.get(roomId);
+    terminal?.session?.run(this.collaboration.code(roomId), terminal.runtime);
+  }
+
+  /** The room switched language: its code is saved under the new language's file. */
+  setRuntime(roomId: RoomId, runtime: Runtime): void {
+    const terminal = this.terminals.get(roomId);
+    if (!terminal) return;
+    terminal.runtime = runtime;
+    terminal.session?.write(this.collaboration.code(roomId), runtime);
   }
 
   stop(roomId: RoomId): void {
@@ -107,7 +117,7 @@ export class TerminalService {
     let session: SandboxSession;
     try {
       session = await this.sandboxes.open(
-        { roomId, runtime: terminal.runtime },
+        { roomId },
         {
           onWaiting: (position) => setSandbox({ state: "waiting", position }),
           signal: terminal.abort.signal,
@@ -134,7 +144,7 @@ export class TerminalService {
       setSandbox({ state: "lost" });
     });
 
-    session.write(this.collaboration.code(roomId));
+    session.write(this.collaboration.code(roomId), terminal.runtime);
     setSandbox({ state: "ready" });
   }
 }

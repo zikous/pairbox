@@ -67,7 +67,10 @@ export class PostgresRoomRepository implements RoomRepository {
     await this.db
       .insert(rooms)
       .values(values)
-      .onConflictDoUpdate({ target: rooms.id, set: { name: room.name, endsAt: values.endsAt } });
+      .onConflictDoUpdate({
+        target: rooms.id,
+        set: { name: room.name, runtime: room.runtime, endsAt: values.endsAt },
+      });
   }
 
   async delete(id: RoomId): Promise<void> {
@@ -95,7 +98,6 @@ function filters(query: RoomListQuery): (SQL | undefined)[] {
     where person->>'name' ilike ${pattern}
   )`;
   return [
-    query.runtime ? eq(rooms.runtime, query.runtime) : undefined,
     query.from ? gte(rooms.startsAt, new Date(query.from)) : undefined,
     query.to ? lt(rooms.startsAt, new Date(query.to)) : undefined,
     // The session's name, or anyone who took part in it.

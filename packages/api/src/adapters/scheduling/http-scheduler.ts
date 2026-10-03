@@ -1,4 +1,4 @@
-import type { Availability, Booking, RoomId, Runtime } from "@pairbox/shared";
+import type { Availability, Booking, RoomId } from "@pairbox/shared";
 import { internalHeaders } from "@pairbox/service";
 import { SlotTakenError } from "../../application/errors";
 import type { Scheduler } from "../../application/ports";
@@ -20,9 +20,8 @@ export class HttpScheduler implements Scheduler {
     await ok(await this.call("DELETE", `/bookings/${roomId}`));
   }
 
-  async availability(runtime: Runtime, from: Date, durationMinutes: number): Promise<Availability> {
+  async availability(from: Date, durationMinutes: number): Promise<Availability> {
     const query = new URLSearchParams({
-      runtime,
       from: from.toISOString(),
       durationMinutes: String(durationMinutes),
     });

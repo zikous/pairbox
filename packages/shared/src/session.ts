@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ParticipantSchema } from "./participant";
 import type { JoinRequest } from "./lobby";
+import { RuntimeSchema, type Runtime } from "./runtime";
 import type { RunStatus } from "./run";
 
 /** Messages the browser sends on `/ws/rooms/:id/session`. */
@@ -16,6 +17,8 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("run") }),
   z.object({ type: z.literal("stop") }),
   z.object({ type: z.literal("reset") }),
+  /** Switches the room's language, for everyone in it. */
+  z.object({ type: z.literal("set_runtime"), runtime: RuntimeSchema }),
 ]);
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 
@@ -31,6 +34,8 @@ export type ServerMessage =
   | { type: "output"; data: string }
   | { type: "status"; status: RunStatus }
   | { type: "sandbox"; sandbox: SandboxState }
+  /** The room's language: sent on connect, then whenever someone switches it. */
+  | { type: "runtime"; runtime: Runtime }
   /** Only sent to the room's owner: who is waiting to be let in. */
   | { type: "join_requests"; requests: JoinRequest[] }
   | { type: "session_ended" }

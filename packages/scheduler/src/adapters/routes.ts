@@ -18,7 +18,7 @@ export const scheduleRoutes: FastifyPluginAsyncZod<{ schedule: Schedule }> = asy
     {
       schema: {
         summary: "Book a room's slot",
-        description: "409 when no worker of the runtime is free for the whole slot.",
+        description: "409 when no worker is free for the whole slot.",
         tags: ["bookings"],
         body: BookingSchema,
         response: { 204: z.null(), 409: ErrorSchema },
@@ -63,8 +63,8 @@ export const scheduleRoutes: FastifyPluginAsyncZod<{ schedule: Schedule }> = asy
       },
     },
     (request) => {
-      const { runtime, from, durationMinutes } = request.query;
-      return schedule.availability(runtime, new Date(from), durationMinutes);
+      const { from, durationMinutes } = request.query;
+      return schedule.availability(new Date(from), durationMinutes);
     },
   );
 };

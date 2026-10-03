@@ -1,4 +1,4 @@
-import type { Availability, Booking, Runtime } from "@pairbox/shared";
+import type { Availability, Booking } from "@pairbox/shared";
 import type { BookingRepository, Capacity } from "./ports";
 
 const SLOT_MINUTES = 30;
@@ -13,7 +13,7 @@ export class SlotFullError extends Error {
 
 /**
  * The calendar of booked rooms. A booking is accepted only if, at every moment of its slot,
- * fewer rooms of the same runtime are booked than there are workers for it.
+ * fewer rooms are booked than there are workers.
  */
 export class Schedule {
   constructor(
@@ -25,9 +25,9 @@ export class Schedule {
   async book(booking: Booking): Promise<void> {
     const from = new Date(booking.startsAt);
     const to = new Date(booking.endsAt);
-    const capacity = await this.capacity.of(booking.runtime);
-    await this.bookings.exclusively(booking.runtime, async () => {
-      const taken = await this.bookings.overlapping(booking.runtime, from, to);
+    const capacity = await this.capacity.workers();
+    await this.bookings.exclusively(async () => {
+      const taken = await this.bookings.overlapping(from, to);
       if (peakOverlap(taken, from, to) >= capacity) throw new SlotFullError();
       await this.bookings.insert(booking);
     });
@@ -38,12 +38,12 @@ export class Schedule {
   }
 
   /** Every half hour of the day starting at `from`: can a session of that length start then? */
-  async availability(runtime: Runtime, from: Date, durationMinutes: number): Promise<Availability> {
+  async availability(from: Date, durationMinutes: number): Promise<Availability> {
     const length = durationMinutes * MINUTE;
     const until = new Date(from.getTime() + SLOTS_PER_DAY * SLOT_MINUTES * MINUTE + length);
     const [capacity, taken] = await Promise.all([
-      this.capacity.of(runtime),
-      this.bookings.overlapping(runtime, from, until),
+      this.capacity.workers(),
+      this.bookings.overlapping(from, until),
     ]);
 
     const slots = Array.from({ length: SLOTS_PER_DAY }, (_, i) => {

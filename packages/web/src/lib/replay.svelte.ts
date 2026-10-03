@@ -40,6 +40,10 @@ export class Replay {
   private output = "";
   private readonly outputEvents = new Listeners<string>();
 
+  /**
+   * `initialRuntime` is for recordings older than language switching: newer ones say which
+   * language they started in, as their first event.
+   */
   constructor(
     replay: RecordingReplay,
     private readonly initialRuntime: Runtime,
@@ -128,6 +132,7 @@ function describe(events: RecordingEvent[]): Activity[] {
         activity.push({ t: event.t, by: event.by, text: "reset the sandbox" });
         break;
       case "runtime":
+        if (!event.by) break; // the language the recording started in, not a switch
         activity.push({
           t: event.t,
           by: event.by,

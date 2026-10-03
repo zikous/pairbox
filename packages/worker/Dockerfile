@@ -1,9 +1,10 @@
-# A worker: one isolated machine for one room at a time. Built from the repo root (see
-# compose.yaml) with a target per runtime: `python` or `typescript`.
-# The agent runs as root so it can clean up; room code runs as the unprivileged `sandbox` user.
+# A worker: one isolated machine for one room at a time, with every language rooms can use:
+# Python, and Node for TypeScript (it runs it directly, by type stripping). Built from the repo
+# root (see compose.yaml). The agent runs as root so it can clean up; room code runs as the
+# unprivileged `sandbox` user.
 
-FROM node:26-slim AS base
-# Build tools are only used if node-pty has no prebuilt binary for this platform.
+FROM node:26-slim
+# make and g++ are only used if node-pty has no prebuilt binary for this platform.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends procps python3 make g++ \
   && rm -rf /var/lib/apt/lists/* \
@@ -23,10 +24,3 @@ COPY packages/service packages/service
 COPY packages/worker packages/worker
 WORKDIR /app/packages/worker
 CMD ["node", "--import", "tsx", "src/main.ts"]
-
-FROM base AS python
-ENV WORKER_RUNTIME=python
-
-# Node runs TypeScript directly (type stripping), so nothing else is needed.
-FROM base AS typescript
-ENV WORKER_RUNTIME=typescript

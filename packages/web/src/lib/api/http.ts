@@ -68,9 +68,8 @@ export const httpRooms: RoomsApi = {
   create: (input) => request<Room>("POST", "/rooms", input),
   remove: (id) => request<undefined>("DELETE", `/rooms/${id}`),
   end: (id) => request<undefined>("POST", `/rooms/${id}/end`),
-  availability: (runtime, from, durationMinutes) => {
+  availability: (from, durationMinutes) => {
     const query = new URLSearchParams({
-      runtime,
       from: from.toISOString(),
       durationMinutes: String(durationMinutes),
     });

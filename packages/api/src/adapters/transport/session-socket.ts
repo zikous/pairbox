@@ -82,6 +82,7 @@ export function openSession(
     clock.watch(room);
     // Catch up on what happened before we joined.
     const { scrollback, status, sandbox } = terminals.attach(roomId, room.runtime);
+    send({ type: "runtime", runtime: room.runtime });
     send({ type: "sandbox", sandbox });
     if (scrollback) send({ type: "output", data: scrollback });
     send({ type: "status", status });
@@ -114,6 +115,9 @@ export function openSession(
       case "reset":
         recordings.record(roomId, { type: message.type, by });
         return terminals[message.type](roomId);
+      case "set_runtime":
+        recordings.record(roomId, { type: "runtime", runtime: message.runtime, by });
+        return rooms.setRuntime(roomId, message.runtime);
     }
   }
 }

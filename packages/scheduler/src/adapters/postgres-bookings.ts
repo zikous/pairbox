@@ -3,7 +3,7 @@ import { and, eq, gt, lt, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
-import { isRuntime, type Booking, type Runtime } from "@pairbox/shared";
+import type { Booking } from "@pairbox/shared";
 import type { BookingRepository } from "../application/ports";
 import * as schema from "./schema";
 import { bookings } from "./schema";
@@ -24,25 +24,16 @@ export async function connectDatabase(url: string) {
 export class PostgresBookings implements BookingRepository {
   constructor(private readonly db: Database) {}
 
-  async overlapping(runtime: Runtime, from: Date, to: Date): Promise<Booking[]> {
+  async overlapping(from: Date, to: Date): Promise<Booking[]> {
     const rows = await this.db
       .select()
       .from(bookings)
-      .where(
-        and(eq(bookings.runtime, runtime), lt(bookings.startsAt, to), gt(bookings.endsAt, from)),
-      );
-    return rows.flatMap((row) =>
-      isRuntime(row.runtime)
-        ? [
-            {
-              ...row,
-              runtime: row.runtime,
-              startsAt: row.startsAt.toISOString(),
-              endsAt: row.endsAt.toISOString(),
-            },
-          ]
-        : [],
-    );
+      .where(and(lt(bookings.startsAt, to), gt(bookings.endsAt, from)));
+    return rows.map((row) => ({
+      ...row,
+      startsAt: row.startsAt.toISOString(),
+      endsAt: row.endsAt.toISOString(),
+    }));
   }
 
   async insert(booking: Booking): Promise<void> {
@@ -57,10 +48,10 @@ export class PostgresBookings implements BookingRepository {
     await this.db.delete(bookings).where(eq(bookings.roomId, roomId));
   }
 
-  exclusively<T>(runtime: Runtime, work: () => Promise<T>): Promise<T> {
-    // A transaction-scoped advisory lock serializes bookings of the same runtime.
+  exclusively<T>(work: () => Promise<T>): Promise<T> {
+    // A transaction-scoped advisory lock serializes bookings.
     return this.db.transaction(async (tx) => {
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`booking:${runtime}`}))`);
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext('booking'))`);
       return work();
     });
   }

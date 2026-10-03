@@ -1,5 +1,5 @@
 import { toast } from "svelte-sonner";
-import type { RoomPage, Runtime } from "@pairbox/shared";
+import type { RoomPage } from "@pairbox/shared";
 import { api } from "$lib/api";
 import { daysFromNow, errorMessage } from "$lib/format";
 
@@ -30,7 +30,6 @@ const SEARCH_DELAY_MS = 250;
 export class SessionList {
   readonly tab: ListTab;
   search = $state("");
-  runtime = $state<Runtime | "all">("all");
   period = $state("all");
   page = $state(1);
 
@@ -59,7 +58,6 @@ export class SessionList {
       const request = {
         tab: this.tab,
         q: this.query,
-        runtime: this.runtime === "all" ? undefined : this.runtime,
         ...this.bounds(),
         page: this.page,
         pageSize: PAGE_SIZE,
@@ -79,11 +77,7 @@ export class SessionList {
   }
 
   get filtered(): boolean {
-    return !!this.query || this.runtime !== "all" || this.periodDays !== undefined;
-  }
-
-  setRuntime(runtime: Runtime | "all"): void {
-    [this.runtime, this.page] = [runtime, 1];
+    return !!this.query || this.periodDays !== undefined;
   }
 
   setPeriod(period: string): void {
@@ -91,7 +85,7 @@ export class SessionList {
   }
 
   clearFilters(): void {
-    [this.search, this.query, this.runtime, this.period, this.page] = ["", "", "all", "all", 1];
+    [this.search, this.query, this.period, this.page] = ["", "", "all", 1];
   }
 
   /** Fetches the current page again, after something changed on the server. */

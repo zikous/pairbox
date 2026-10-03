@@ -1,8 +1,7 @@
 <script lang="ts">
   import { LogIn } from "@lucide/svelte";
-  import { RUNTIMES, type RoomSummary } from "@pairbox/shared";
+  import type { RoomSummary } from "@pairbox/shared";
   import CopyButton from "$lib/components/shared/CopyButton.svelte";
-  import RuntimeDot from "$lib/components/shared/RuntimeDot.svelte";
   import { Button, buttonVariants } from "$lib/components/ui/button";
   import { hours, span } from "$lib/format";
   import { clock } from "$lib/now.svelte";
@@ -25,9 +24,8 @@
               : `Opens to guests in ${span(Date.parse(room.startsAt) - clock.now)}`}
           </p>
           <p class="mt-1 truncate font-medium">{room.name}</p>
-          <p class="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
-            <RuntimeDot runtime={room.runtime} />{RUNTIMES[room.runtime].label}
-            <span>·</span>{hours(room.startsAt, room.endsAt)}
+          <p class="text-muted-foreground mt-0.5 font-mono text-xs">
+            {hours(room.startsAt, room.endsAt)}
           </p>
         </div>
       </div>
