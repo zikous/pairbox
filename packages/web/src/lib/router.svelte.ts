@@ -2,7 +2,7 @@ import type { ShareInfo } from "@pairbox/shared";
 
 export type Route =
   | { name: "home" }
-  | { name: "recordings" }
+  | { name: "past" }
   | { name: "join" }
   | { name: "sign-in" }
   | { name: "sign-up" }
@@ -14,9 +14,9 @@ function parse(pathname: string): Route {
   if (pathname === "/") return { name: "home" };
   if (pathname === "/signin") return { name: "sign-in" };
   if (pathname === "/signup") return { name: "sign-up" };
-  if (pathname === "/recordings") return { name: "recordings" };
+  if (pathname === "/past") return { name: "past" };
   if (pathname === "/join") return { name: "join" };
-  const replay = /^\/recordings\/([a-z0-9]+)\/?$/.exec(pathname);
+  const replay = /^\/r\/([a-z0-9]+)\/replay\/?$/.exec(pathname);
   if (replay?.[1]) return { name: "replay", roomId: replay[1] };
   const room = /^\/r\/([a-z0-9]+)\/?$/.exec(pathname);
   return room?.[1] ? { name: "room", id: room[1] } : { name: "not-found" };
@@ -50,7 +50,7 @@ export const router = {
 };
 
 export const roomPath = (id: string) => `/r/${id}`;
-export const replayPath = (id: string) => `/recordings/${id}`;
+export const replayPath = (id: string) => `/r/${id}/replay`;
 
 /** The public address from the api (PUBLIC_URL or the tunnel's), once known. */
 let publicOrigin = $state<string | null>(null);

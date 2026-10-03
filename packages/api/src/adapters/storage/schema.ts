@@ -70,6 +70,15 @@ export const templates = pgTable("templates", {
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 });
 
+/** The room owner's private notes: one Markdown document per room. */
+export const notes = pgTable("notes", {
+  roomId: text()
+    .primaryKey()
+    .references(() => rooms.id, { onDelete: "cascade" }),
+  body: text().notNull(),
+  updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});
+
 /** One recording per room. The events themselves live in object storage, in `chunkCount` chunks. */
 export const recordings = pgTable(
   "recordings",

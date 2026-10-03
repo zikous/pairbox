@@ -71,3 +71,6 @@ export function length(ms: number): string {
 /** The moment `days` from now (negative: ago), as an ISO timestamp. */
 export const daysFromNow = (days: number): string =>
   new Date(Date.now() + days * 86_400_000).toISOString();
+
+/** "14:05": the time of day of a moment (an ISO string or milliseconds). */
+export const clockTime = (moment: string | number): string => time(new Date(moment));

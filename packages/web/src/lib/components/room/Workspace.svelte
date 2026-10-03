@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { MediaQuery } from "svelte/reactivity";
-  import { Link, Play, RotateCcw, Settings, Square } from "@lucide/svelte";
+  import { Link, NotebookPen, Play, RotateCcw, Settings, Square } from "@lucide/svelte";
   import type { Pane } from "paneforge";
   import { mode } from "mode-watcher";
   import { toast } from "svelte-sonner";
@@ -13,12 +13,15 @@
     type SandboxState,
   } from "@pairbox/shared";
   import type { RoomSession } from "$lib/api";
+  import NotesEditor from "$lib/components/notes/NotesEditor.svelte";
   import IconButton from "$lib/components/shared/IconButton.svelte";
   import RuntimeDot from "$lib/components/shared/RuntimeDot.svelte";
   import CopyButton from "$lib/components/shared/CopyButton.svelte";
   import { Button, buttonVariants } from "$lib/components/ui/button";
   import * as Resizable from "$lib/components/ui/resizable";
   import * as Tooltip from "$lib/components/ui/tooltip";
+  import { clockTime } from "$lib/format";
+  import { clock } from "$lib/now.svelte";
   import { modKey } from "$lib/platform";
   import { prefs } from "$lib/prefs.svelte";
   import { roomUrl } from "$lib/router.svelte";
@@ -47,6 +50,8 @@
   let people = $state<Person[]>([]);
   let cursor = $state({ line: 1, column: 1 });
   let preferencesOpen = $state(false);
+  // The owner's private notes, beside the editor and terminal. Guests never load them.
+  let notesOpen = $state(false);
   let terminal: Terminal;
   let terminalPane: Pane;
   let terminalOpen = $state(true);
@@ -141,6 +146,16 @@
       </Tooltip.Content>
     </Tooltip.Root>
     <Participants {people} />
+    {#if room.owner}
+      <Button
+        variant={notesOpen ? "secondary" : "outline"}
+        size="sm"
+        aria-pressed={notesOpen}
+        onclick={() => (notesOpen = !notesOpen)}
+      >
+        <NotebookPen /> Notes
+      </Button>
+    {/if}
     <CopyButton text={inviteUrl} class={buttonVariants({ variant: "outline", size: "sm" })}>
       <Link /> Invite
     </CopyButton>
@@ -149,74 +164,84 @@
     </IconButton>
   {/snippet}
 
-  <Resizable.PaneGroup
-    direction={narrow.current ? "vertical" : "horizontal"}
-    autoSaveId={narrow.current ? "pairbox-layout-vertical" : "pairbox-layout-horizontal"}
-  >
-    <Resizable.Pane defaultSize={58} minSize={25} class="flex flex-col">
-      <PaneHeader>
-        {#snippet tab()}
-          <RuntimeDot {runtime} />{RUNTIMES[runtime].file}
-        {/snippet}
-        {#snippet actions()}
-          <LanguagePicker value={runtime} onchange={(next) => session.setRuntime(next)} />
-        {/snippet}
-      </PaneHeader>
-      <div class="min-h-0 flex-1">
-        <Editor
-          doc={session.doc}
-          awareness={session.awareness}
-          {runtime}
-          keymap={prefs.keymap}
-          {dark}
-          onrun={run}
-          oncursor={(position) => (cursor = position)}
-        />
-      </div>
-    </Resizable.Pane>
-
-    <PaneDivider
+  <div class="relative flex h-full">
+    <Resizable.PaneGroup
+      class="flex-1"
       direction={narrow.current ? "vertical" : "horizontal"}
-      collapsed={!terminalOpen}
-      label={`${terminalOpen ? "Hide" : "Show"} terminal (${modKey}J)`}
-      ontoggle={toggleTerminal}
-    />
-
-    <Resizable.Pane
-      bind:this={terminalPane}
-      defaultSize={42}
-      minSize={20}
-      collapsible
-      collapsedSize={0}
-      onResize={(size) => (terminalOpen = size > 0)}
-      class="flex flex-col"
+      autoSaveId={narrow.current ? "pairbox-layout-vertical" : "pairbox-layout-horizontal"}
     >
-      <PaneHeader>
-        {#snippet tab()}
-          <span class="text-primary">❯</span>terminal
-        {/snippet}
-        {#snippet actions()}
-          <IconButton label="Reset sandbox" onclick={() => session.terminal.reset()}>
-            <RotateCcw />
-          </IconButton>
-          {#if running}
-            <Button variant="outline" size="sm" onclick={() => session.terminal.stop()}>
-              <Square class="fill-current" /> Stop
-            </Button>
-          {:else}
-            <Button size="sm" onclick={run} disabled={sandbox.state !== "ready"}>
-              <Play class="fill-current" /> Run
-              <span class="font-mono text-[10px] opacity-60">{modKey}↵</span>
-            </Button>
-          {/if}
-        {/snippet}
-      </PaneHeader>
-      <div class="relative min-h-0 flex-1">
-        <Terminal bind:this={terminal} session={session.terminal} {dark} />
-        <SandboxOverlay {sandbox} onreset={() => session.terminal.reset()} />
-      </div>
-    </Resizable.Pane>
-  </Resizable.PaneGroup>
+      <Resizable.Pane defaultSize={58} minSize={25} class="flex flex-col">
+        <PaneHeader>
+          {#snippet tab()}
+            <RuntimeDot {runtime} />{RUNTIMES[runtime].file}
+          {/snippet}
+          {#snippet actions()}
+            <LanguagePicker value={runtime} onchange={(next) => session.setRuntime(next)} />
+          {/snippet}
+        </PaneHeader>
+        <div class="min-h-0 flex-1">
+          <Editor
+            doc={session.doc}
+            awareness={session.awareness}
+            {runtime}
+            keymap={prefs.keymap}
+            {dark}
+            onrun={run}
+            oncursor={(position) => (cursor = position)}
+          />
+        </div>
+      </Resizable.Pane>
+
+      <PaneDivider
+        direction={narrow.current ? "vertical" : "horizontal"}
+        collapsed={!terminalOpen}
+        label={`${terminalOpen ? "Hide" : "Show"} terminal (${modKey}J)`}
+        ontoggle={toggleTerminal}
+      />
+
+      <Resizable.Pane
+        bind:this={terminalPane}
+        defaultSize={42}
+        minSize={20}
+        collapsible
+        collapsedSize={0}
+        onResize={(size) => (terminalOpen = size > 0)}
+        class="flex flex-col"
+      >
+        <PaneHeader>
+          {#snippet tab()}
+            <span class="text-primary">❯</span>terminal
+          {/snippet}
+          {#snippet actions()}
+            <IconButton label="Reset sandbox" onclick={() => session.terminal.reset()}>
+              <RotateCcw />
+            </IconButton>
+            {#if running}
+              <Button variant="outline" size="sm" onclick={() => session.terminal.stop()}>
+                <Square class="fill-current" /> Stop
+              </Button>
+            {:else}
+              <Button size="sm" onclick={run} disabled={sandbox.state !== "ready"}>
+                <Play class="fill-current" /> Run
+                <span class="font-mono text-[10px] opacity-60">{modKey}↵</span>
+              </Button>
+            {/if}
+          {/snippet}
+        </PaneHeader>
+        <div class="relative min-h-0 flex-1">
+          <Terminal bind:this={terminal} session={session.terminal} {dark} />
+          <SandboxOverlay {sandbox} onreset={() => session.terminal.reset()} />
+        </div>
+      </Resizable.Pane>
+    </Resizable.PaneGroup>
+    {#if room.owner && notesOpen}
+      <aside
+        class="bg-background w-80 shrink-0 border-l max-md:absolute max-md:inset-0 max-md:z-20 max-md:w-auto"
+      >
+        <NotesEditor roomId={room.id} title={room.name} stamp={() => clockTime(clock.now)} />
+      </aside>
+    {/if}
+  </div>
 
   {#snippet footer()}
     <StatusBar online={people.length} {cursor} keymap={prefs.keymap} {status} {sandbox} />

@@ -8,9 +8,10 @@ import {
   type RoomCounts,
   type RoomPage,
   type RoomView,
+  type SessionNotes,
   type User,
 } from "@pairbox/shared";
-import type { AuthApi, LobbyApi, RecordingsApi, RoomsApi } from "./types";
+import type { AuthApi, LobbyApi, NotesApi, RecordingsApi, RoomsApi } from "./types";
 
 export class HttpError extends Error {
   constructor(
@@ -91,4 +92,9 @@ export const httpLobby: LobbyApi = {
 
 export const httpRecordings: RecordingsApi = {
   get: (roomId) => request<RecordingReplay>("GET", `/rooms/${roomId}/recording`),
+};
+
+export const httpNotes: NotesApi = {
+  get: (roomId) => request<SessionNotes>("GET", `/rooms/${roomId}/notes`),
+  save: (roomId, body) => request<SessionNotes>("PUT", `/rooms/${roomId}/notes`, { body }),
 };

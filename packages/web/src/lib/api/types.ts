@@ -17,6 +17,7 @@ import type {
   RunStatus,
   Runtime,
   SandboxState,
+  SessionNotes,
   User,
 } from "@pairbox/shared";
 
@@ -49,6 +50,12 @@ export interface LobbyApi {
   ask(roomId: RoomId, participant: Participant): Promise<string>;
   status(roomId: RoomId, requestId: string): Promise<JoinStatus>;
   decide(roomId: RoomId, requestId: string, admit: boolean): Promise<void>;
+}
+
+/** Your private notes on one of your sessions: one Markdown document. */
+export interface NotesApi {
+  get(roomId: RoomId): Promise<SessionNotes>;
+  save(roomId: RoomId, body: string): Promise<SessionNotes>;
 }
 
 /** The recording of one of your sessions. */
@@ -92,6 +99,7 @@ export interface Api {
   rooms: RoomsApi;
   lobby: LobbyApi;
   recordings: RecordingsApi;
+  notes: NotesApi;
   /**
    * Connects to an open room, as its owner or as a guest with their ticket. Resolves once the
    * room's current state has been received.

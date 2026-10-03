@@ -351,6 +351,40 @@ describe("lobby", () => {
   });
 });
 
+describe("notes", () => {
+  it("are one document per session, the owner's alone", async () => {
+    const ada = await signUp("ada@example.com");
+    const bob = await signUp("bob@example.com");
+    const room = await createRoom(ada);
+    const url = `/api/rooms/${room.id}/notes`;
+    const save = (body: string, headers = ada) =>
+      app.inject({ method: "PUT", url, headers, payload: { body } });
+
+    expect((await app.inject({ url, headers: ada })).json()).toEqual({ body: "", updatedAt: null });
+    const saved = await save("# Ada\n\n- **12:04** good questions about edge cases\n");
+    expect(saved.statusCode).toBe(200);
+    expect((await app.inject({ url, headers: ada })).json()).toMatchObject({
+      body: "# Ada\n\n- **12:04** good questions about edge cases\n",
+    });
+    expect((await save("")).json()).toMatchObject({ body: "" }); // clearing is saving too
+
+    // Nobody else can read or write them.
+    expect((await app.inject({ url, headers: bob })).statusCode).toBe(403);
+    expect((await save("mine now", bob)).statusCode).toBe(403);
+    expect((await app.inject({ url })).statusCode).toBe(401);
+  });
+
+  it("are deleted with their session", async () => {
+    const ada = await signUp();
+    const room = await createRoom(ada);
+    const url = `/api/rooms/${room.id}/notes`;
+    await app.inject({ method: "PUT", url, headers: ada, payload: { body: "Gone soon" } });
+    await app.inject({ method: "DELETE", url: `/api/rooms/${room.id}`, headers: ada });
+    const { rows } = await database.db.execute(sql`select 1 from notes where room_id = ${room.id}`);
+    expect(rows).toHaveLength(0);
+  });
+});
+
 describe("session socket", () => {
   it("shares the terminal and runs code", async () => {
     const owner = await signUp();

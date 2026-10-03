@@ -9,10 +9,10 @@
   import Auth from "./pages/Auth.svelte";
   import Join from "./pages/Join.svelte";
   import NotFound from "./pages/NotFound.svelte";
-  import Recordings from "./pages/Recordings.svelte";
+  import Past from "./pages/Past.svelte";
   import Replay from "./pages/Replay.svelte";
   import Room from "./pages/Room.svelte";
-  import Sessions from "./pages/Sessions.svelte";
+  import Upcoming from "./pages/Upcoming.svelte";
 
   const route = $derived(router.route);
 </script>
@@ -31,9 +31,9 @@
   {:else if auth.user}
     <AppShell>
       {#if route.name === "home"}
-        <Sessions />
-      {:else if route.name === "recordings"}
-        <Recordings />
+        <Upcoming />
+      {:else if route.name === "past"}
+        <Past />
       {:else if route.name === "join"}
         <Join />
       {:else}

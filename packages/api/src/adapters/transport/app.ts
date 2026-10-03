@@ -8,6 +8,7 @@ import type { AuthService } from "../../application/auth";
 import type { RoomEvents } from "../../application/events";
 import type { Lobby } from "../../application/lobby";
 import type { Scheduler } from "../../application/ports";
+import type { NoteService } from "../../application/notes";
 import type { RecordingService } from "../../application/recordings";
 import type { RoomService } from "../../application/rooms";
 import type { SessionClock } from "../../application/session-clock";
@@ -17,6 +18,7 @@ import type { PublicAddress } from "../sharing/public-address";
 import { authRoutes } from "./auth-routes";
 import { errorHandler } from "./errors";
 import { lobbyRoutes } from "./lobby-routes";
+import { notesRoutes } from "./notes-routes";
 import { recordingsRoutes } from "./recordings-routes";
 import { roomSockets } from "./room-sockets";
 import { roomsRoutes } from "./rooms-routes";
@@ -28,6 +30,7 @@ export interface AppDeps {
   clock: SessionClock;
   scheduler: Scheduler;
   recordings: RecordingService;
+  notes: NoteService;
   terminals: TerminalService;
   events: RoomEvents;
   collaboration: YjsCollaboration;
@@ -71,6 +74,7 @@ export async function buildApp({ logger, publicAddress, ...deps }: AppDeps) {
   await app.register(roomsRoutes, { prefix: "/api/rooms", ...deps });
   await app.register(lobbyRoutes, { prefix: "/api/rooms", ...deps });
   await app.register(recordingsRoutes, { prefix: "/api/rooms", ...deps });
+  await app.register(notesRoutes, { prefix: "/api/rooms", ...deps });
   await app.register(roomSockets, { prefix: "/ws/rooms", ...deps });
   // Save what the open sessions recorded so far when shutting down.
   app.addHook("onClose", () => deps.recordings.pauseAll());

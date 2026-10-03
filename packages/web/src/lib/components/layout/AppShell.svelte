@@ -30,16 +30,16 @@
   const NAV: NavItem[] = [
     {
       href: "/",
-      label: "Sessions",
+      label: "Upcoming",
       icon: CalendarDays,
       active: (route) => route.name === "home",
       count: (counts) => counts.live + counts.upcoming,
     },
     {
-      href: "/recordings",
-      label: "Recordings",
+      href: "/past",
+      label: "Past",
       icon: History,
-      active: (route) => route.name === "recordings" || route.name === "replay",
+      active: (route) => route.name === "past" || route.name === "replay",
       count: (counts) => counts.past,
     },
     {

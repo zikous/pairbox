@@ -17,7 +17,7 @@
   import { roomPath, roomUrl, router } from "$lib/router.svelte";
   import { SessionList } from "$lib/sessions.svelte";
 
-  /** What's on now and what's coming. Finished sessions move to Recordings. */
+  /** What's on now and what's coming. Finished sessions move to Past. */
   const REFRESH_MS = 60_000;
 
   const upcoming = new SessionList("upcoming");
@@ -54,7 +54,7 @@
 
 <main class="mx-auto w-full max-w-6xl px-4 py-8 md:px-8 md:py-10">
   <PageTitle
-    title="Sessions"
+    title="Upcoming"
     description="Book a slot, send the invite, and let your candidate in when it starts."
   >
     {#snippet action()}
@@ -72,7 +72,7 @@
   {/if}
 
   <section class="mt-8">
-    <h2 class="label-mono mb-3">Upcoming</h2>
+    {#if live.length}<h2 class="label-mono mb-3">Later</h2>{/if}
     <SessionsBrowser
       list={upcoming}
       ondelete={(room) => ([roomToDelete, deleteOpen] = [room, true])}

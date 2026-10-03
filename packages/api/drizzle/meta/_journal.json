@@ -29,6 +29,27 @@
       "when": 1791051134061,
       "tag": "0003_one_recording_per_room",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791054807506,
+      "tag": "0004_notes",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791055583935,
+      "tag": "0005_drop_note_list",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791055584170,
+      "tag": "0006_notes_document",
+      "breakpoints": true
     }
   ]
 }

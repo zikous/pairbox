@@ -9,6 +9,7 @@ export * from "./error";
 export * from "./json";
 export * from "./listeners";
 export * from "./lobby";
+export * from "./notes";
 export * from "./participant";
 export * from "./recording";
 export * from "./room";

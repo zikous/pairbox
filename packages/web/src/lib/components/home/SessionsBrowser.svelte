@@ -12,10 +12,12 @@
   interface Props {
     list: SessionList;
     ondelete: (room: Room) => void;
+    /** Past sessions only: opens your notes on one. */
+    onnotes?: (room: Room) => void;
     empty: Snippet;
   }
 
-  let { list, ondelete, empty }: Props = $props();
+  let { list, ondelete, onnotes, empty }: Props = $props();
 </script>
 
 <div class="space-y-4">
@@ -39,6 +41,7 @@
       rooms={list.result?.items}
       stale={list.loading && !!list.result}
       {ondelete}
+      {onnotes}
     />
     {#if list.result}
       <Pager

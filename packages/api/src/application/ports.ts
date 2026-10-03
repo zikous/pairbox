@@ -11,6 +11,7 @@ import type {
   RoomPage,
   RunStatus,
   Runtime,
+  SessionNotes,
   User,
 } from "@pairbox/shared";
 
@@ -137,4 +138,10 @@ export interface CollaborationObserver {
   edited(roomId: RoomId, update: Uint8Array, by: Participant | undefined): void;
   /** Cursors, selections and who is here. */
   presence(roomId: RoomId, update: Uint8Array): void;
+}
+
+/** The room owner's private notes, one document per room. */
+export interface NoteRepository {
+  get(roomId: RoomId): Promise<SessionNotes | undefined>;
+  save(roomId: RoomId, body: string): Promise<SessionNotes>;
 }

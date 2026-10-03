@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { ChevronRight, Lock } from "@lucide/svelte";
+  import { ChevronRight, Lock, NotebookPen } from "@lucide/svelte";
   import { mode } from "mode-watcher";
   import { RUNTIMES, type Recording } from "@pairbox/shared";
   import { api, HttpError } from "$lib/api";
   import ActivityList from "$lib/components/replay/ActivityList.svelte";
+  import NotesEditor from "$lib/components/notes/NotesEditor.svelte";
   import Timeline from "$lib/components/replay/Timeline.svelte";
   import Editor from "$lib/components/room/Editor.svelte";
   import PaneHeader from "$lib/components/room/PaneHeader.svelte";
@@ -11,7 +12,8 @@
   import Terminal from "$lib/components/room/Terminal.svelte";
   import StateMessage from "$lib/components/shared/StateMessage.svelte";
   import RuntimeDot from "$lib/components/shared/RuntimeDot.svelte";
-  import { dateTime, errorMessage } from "$lib/format";
+  import { Button } from "$lib/components/ui/button";
+  import { dateTime, errorMessage, timecode } from "$lib/format";
   import { prefs } from "$lib/prefs.svelte";
   import { Replay } from "$lib/replay.svelte";
 
@@ -24,6 +26,7 @@
   let error = $state<string>();
   let playing = $state(false);
   let speed = $state(1);
+  let notesOpen = $state(false);
   const dark = $derived(mode.current === "dark");
 
   void (async () => {
@@ -72,58 +75,75 @@
 {:else}
   <div class="flex h-full flex-col">
     <header class="flex h-11 shrink-0 items-center gap-2 border-b px-4 text-sm">
-      <a href="/recordings" class="text-muted-foreground hover:text-foreground">Recordings</a>
+      <a href="/past" class="text-muted-foreground hover:text-foreground">Past sessions</a>
       <ChevronRight class="text-muted-foreground/60 size-3.5" />
       <h1 class="truncate font-medium">{roomName}</h1>
       <span class="text-muted-foreground ml-auto hidden text-xs md:inline">
         {dateTime(recording.startedAt)}
       </span>
+      <Button
+        variant={notesOpen ? "secondary" : "outline"}
+        size="sm"
+        aria-pressed={notesOpen}
+        onclick={() => (notesOpen = !notesOpen)}
+      >
+        <NotebookPen /> Notes
+      </Button>
     </header>
 
-    <main class="grid min-h-0 flex-1 grid-cols-[16rem_3fr_2fr] max-md:grid-cols-1">
-      <aside class="min-h-0 overflow-y-auto border-r max-md:hidden">
-        <p class="label-mono px-4 pt-3">Activity</p>
-        <ActivityList
-          activity={replay.activity}
-          time={replay.time}
-          onseek={(t) => replay?.seek(t)}
-        />
-      </aside>
-
-      <section class="flex min-h-0 flex-col border-r">
-        <PaneHeader>
-          {#snippet tab()}
-            <RuntimeDot runtime={replay?.runtime ?? "python"} />{RUNTIMES[
-              replay?.runtime ?? "python"
-            ].file}
-          {/snippet}
-        </PaneHeader>
-        <div class="min-h-0 flex-1">
-          {#key replay.doc}
-            <Editor
-              doc={replay.doc}
-              awareness={replay.awareness}
-              runtime={replay.runtime}
-              keymap={prefs.keymap}
-              {dark}
-              readonly
-            />
-          {/key}
-        </div>
-      </section>
-
-      <section class="flex min-h-0 flex-col">
-        <PaneHeader>
-          {#snippet tab()}<span class="text-primary">❯</span>terminal{/snippet}
-        </PaneHeader>
-        <div class="min-h-0 flex-1">
-          <Terminal
-            session={{ onOutput: (listener) => replay?.onOutput(listener) ?? (() => {}) }}
-            {dark}
+    <div class="relative flex min-h-0 flex-1">
+      <main class="grid min-h-0 flex-1 grid-cols-[16rem_3fr_2fr] max-md:grid-cols-1">
+        <aside class="min-h-0 overflow-y-auto border-r max-md:hidden">
+          <p class="label-mono px-4 pt-3">Activity</p>
+          <ActivityList
+            activity={replay.activity}
+            time={replay.time}
+            onseek={(t) => replay?.seek(t)}
           />
-        </div>
-      </section>
-    </main>
+        </aside>
+
+        <section class="flex min-h-0 flex-col border-r">
+          <PaneHeader>
+            {#snippet tab()}
+              <RuntimeDot runtime={replay?.runtime ?? "python"} />{RUNTIMES[
+                replay?.runtime ?? "python"
+              ].file}
+            {/snippet}
+          </PaneHeader>
+          <div class="min-h-0 flex-1">
+            {#key replay.doc}
+              <Editor
+                doc={replay.doc}
+                awareness={replay.awareness}
+                runtime={replay.runtime}
+                keymap={prefs.keymap}
+                {dark}
+                readonly
+              />
+            {/key}
+          </div>
+        </section>
+
+        <section class="flex min-h-0 flex-col">
+          <PaneHeader>
+            {#snippet tab()}<span class="text-primary">❯</span>terminal{/snippet}
+          </PaneHeader>
+          <div class="min-h-0 flex-1">
+            <Terminal
+              session={{ onOutput: (listener) => replay?.onOutput(listener) ?? (() => {}) }}
+              {dark}
+            />
+          </div>
+        </section>
+      </main>
+      {#if notesOpen}
+        <aside
+          class="bg-background w-80 shrink-0 border-l max-md:absolute max-md:inset-0 max-md:z-20 max-md:w-auto"
+        >
+          <NotesEditor {roomId} title={roomName} stamp={() => timecode(replay?.time ?? 0)} />
+        </aside>
+      {/if}
+    </div>
 
     <Timeline
       time={replay.time}

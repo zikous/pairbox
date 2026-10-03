@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { History } from "@lucide/svelte";
+  import { History, NotebookPen } from "@lucide/svelte";
   import type { Room, RoomSummary } from "@pairbox/shared";
   import CopyButton from "$lib/components/shared/CopyButton.svelte";
   import { Button, buttonVariants } from "$lib/components/ui/button";
@@ -19,9 +19,11 @@
     /** A newer page is on its way: dim the one shown. */
     stale?: boolean;
     ondelete: (room: Room) => void;
+    /** Opens your notes on a past session. */
+    onnotes?: (room: Room) => void;
   }
 
-  let { tab, rooms, stale = false, ondelete }: Props = $props();
+  let { tab, rooms, stale = false, ondelete, onnotes }: Props = $props();
 
   const duration = (room: Room) => Date.parse(room.endsAt) - Date.parse(room.startsAt);
 </script>
@@ -36,7 +38,7 @@
         <Table.Head class="hidden w-56 sm:table-cell">
           {tab === "past" ? "Participants" : "Starts"}
         </Table.Head>
-        <Table.Head class="w-40 pr-4"><span class="sr-only">Actions</span></Table.Head>
+        <Table.Head class="w-56 pr-4"><span class="sr-only">Actions</span></Table.Head>
       </Table.Row>
     </Table.Header>
     <Table.Body class={["transition-opacity", stale && "opacity-60"]}>
@@ -81,6 +83,11 @@
             <Table.Cell class="pr-4">
               <div class="flex items-center justify-end gap-1">
                 {#if tab === "past"}
+                  {#if onnotes}
+                    <Button size="sm" variant="ghost" onclick={() => onnotes(room)}>
+                      <NotebookPen /> Notes
+                    </Button>
+                  {/if}
                   {#if room.participants.length}
                     <Button href={replayPath(room.id)} size="sm" variant="outline">
                       <History /> Replay

@@ -3,6 +3,7 @@ import { AuthService } from "./application/auth";
 import { RoomEvents } from "./application/events";
 import { Lobby } from "./application/lobby";
 import type { RecordingStore, Sandboxes, Scheduler } from "./application/ports";
+import { NoteService } from "./application/notes";
 import { RecordingService } from "./application/recordings";
 import { RoomService } from "./application/rooms";
 import { SessionClock } from "./application/session-clock";
@@ -12,6 +13,7 @@ import { ScryptHasher } from "./adapters/security/scrypt-hasher";
 import { PublicAddress } from "./adapters/sharing/public-address";
 import type { Database } from "./adapters/storage/database";
 import { PostgresRecordingRepository } from "./adapters/storage/postgres-recordings";
+import { PostgresNoteRepository } from "./adapters/storage/postgres-notes";
 import { PostgresRoomRepository } from "./adapters/storage/postgres-rooms";
 import {
   PostgresSessionRepository,
@@ -46,13 +48,24 @@ export function createServer(options: {
   const lobby = new Lobby(events);
   const clock = new SessionClock(events, lobby, terminals, collaboration, recordings);
 
+  const roomService = new RoomService(
+    rooms,
+    scheduler,
+    collaboration,
+    terminals,
+    recordings,
+    clock,
+    events,
+  );
+
   return buildApp({
     auth: new AuthService(
       new PostgresUserRepository(db),
       new PostgresSessionRepository(db),
       new ScryptHasher(),
     ),
-    rooms: new RoomService(rooms, scheduler, collaboration, terminals, recordings, clock, events),
+    rooms: roomService,
+    notes: new NoteService(new PostgresNoteRepository(db), roomService),
     lobby,
     clock,
     scheduler,

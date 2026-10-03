@@ -24,7 +24,7 @@
   <DropdownMenu.Content align="end" class="w-44">
     <DropdownMenu.Item variant="destructive" onSelect={() => ondelete(room)}>
       <Trash2 />
-      {past ? "Delete recording" : "Cancel session"}
+      {past ? "Delete session" : "Cancel session"}
     </DropdownMenu.Item>
   </DropdownMenu.Content>
 </DropdownMenu.Root>
