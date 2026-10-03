@@ -2,6 +2,7 @@ import { normalizeRoomName, type Runtime, type Room, type RoomId } from "@pairbo
 import { InvalidInputError, NotRoomOwnerError, RoomNotFoundError } from "./errors";
 import type { RoomEvents } from "./events";
 import type { Collaboration, OwnedRoom, RoomRepository } from "./ports";
+import type { RecordingService } from "./recordings";
 import type { TerminalService } from "./terminals";
 
 const STARTER_CODE: Record<Runtime, string> = {
@@ -23,6 +24,7 @@ export class RoomService {
     private readonly repository: RoomRepository,
     private readonly collaboration: Collaboration,
     private readonly terminals: TerminalService,
+    private readonly recordings: RecordingService,
     private readonly events: RoomEvents,
   ) {}
 
@@ -39,6 +41,13 @@ export class RoomService {
   async get(id: RoomId): Promise<OwnedRoom> {
     const room = await this.find(id);
     if (!room) throw new RoomNotFoundError(id);
+    return room;
+  }
+
+  /** The room, if it belongs to this user. */
+  async owned(ownerId: string, id: RoomId): Promise<OwnedRoom> {
+    const room = await this.get(id);
+    if (room.ownerId !== ownerId) throw new NotRoomOwnerError();
     return room;
   }
 
@@ -59,11 +68,11 @@ export class RoomService {
   }
 
   async delete(ownerId: string, id: RoomId): Promise<void> {
-    const room = await this.get(id);
-    if (room.ownerId !== ownerId) throw new NotRoomOwnerError();
+    await this.owned(ownerId, id);
     this.events.publish(id, { type: "room_deleted" });
     await this.terminals.close(id);
     this.collaboration.destroy(id);
+    await this.recordings.deleteRoom(id);
     await this.repository.delete(id);
   }
 

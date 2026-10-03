@@ -15,18 +15,21 @@ import {
 } from "fastify-type-provider-zod";
 import type { AuthService } from "../../application/auth";
 import type { RoomEvents } from "../../application/events";
+import type { RecordingService } from "../../application/recordings";
 import type { RoomService } from "../../application/rooms";
 import type { TerminalService } from "../../application/terminals";
 import type { YjsCollaboration } from "../collaboration/yjs-collaboration";
 import type { PublicAddress } from "../sharing/public-address";
 import { authRoutes } from "./auth-routes";
 import { errorHandler } from "./errors";
+import { recordingsRoutes } from "./recordings-routes";
 import { roomSockets } from "./room-sockets";
 import { roomsRoutes } from "./rooms-routes";
 
 export interface AppDeps {
   auth: AuthService;
   rooms: RoomService;
+  recordings: RecordingService;
   terminals: TerminalService;
   events: RoomEvents;
   collaboration: YjsCollaboration;
@@ -93,7 +96,15 @@ export async function buildApp({ logger = false, auth, publicAddress, ...deps }:
   );
   await app.register(authRoutes, { prefix: "/api/auth", auth });
   await app.register(roomsRoutes, { prefix: "/api/rooms", rooms: deps.rooms, auth });
+  await app.register(recordingsRoutes, {
+    prefix: "/api",
+    rooms: deps.rooms,
+    recordings: deps.recordings,
+    auth,
+  });
   await app.register(roomSockets, { prefix: "/ws/rooms", ...deps });
+  // Save what the open sessions recorded so far when shutting down.
+  app.addHook("onClose", () => deps.recordings.endAll());
 
   return app;
 }

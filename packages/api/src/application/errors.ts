@@ -1,6 +1,14 @@
-export class RoomNotFoundError extends Error {
+export class NotFoundError extends Error {}
+
+export class RoomNotFoundError extends NotFoundError {
   constructor(id: string) {
     super(`Room ${id} not found`);
+  }
+}
+
+export class RecordingNotFoundError extends NotFoundError {
+  constructor(id: string) {
+    super(`Recording ${id} not found`);
   }
 }
 

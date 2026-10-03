@@ -1,5 +1,12 @@
-import { Listeners, type ApiError, type Room, type User } from "@pairbox/shared";
-import type { AuthApi, RoomsApi } from "./types";
+import {
+  Listeners,
+  type ApiError,
+  type Recording,
+  type RecordingReplay,
+  type Room,
+  type User,
+} from "@pairbox/shared";
+import type { AuthApi, RecordingsApi, RoomsApi } from "./types";
 
 export class HttpError extends Error {
   constructor(
@@ -50,4 +57,9 @@ export const httpRooms: RoomsApi = {
   get: (id) => orNull(request<Room>("GET", `/rooms/${id}`)),
   create: (input) => request<Room>("POST", "/rooms", input),
   remove: (id) => request<undefined>("DELETE", `/rooms/${id}`),
+};
+
+export const httpRecordings: RecordingsApi = {
+  list: (roomId) => request<Recording[]>("GET", `/rooms/${roomId}/recordings`),
+  get: (id) => request<RecordingReplay>("GET", `/recordings/${id}`),
 };

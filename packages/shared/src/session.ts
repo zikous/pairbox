@@ -1,9 +1,12 @@
 import { z } from "zod";
+import { ParticipantSchema } from "./participant";
 import { RuntimeSchema, type Runtime } from "./runtime";
 import type { RunStatus } from "./run";
 
 /** Messages the browser sends on `/ws/rooms/:id/session`. */
 export const ClientMessageSchema = z.discriminatedUnion("type", [
+  /** Who is at this end, so terminal actions can be attributed (sent on connect and on rename). */
+  z.object({ type: z.literal("hello"), participant: ParticipantSchema }),
   z.object({ type: z.literal("input"), data: z.string().max(4096) }),
   z.object({
     type: z.literal("resize"),

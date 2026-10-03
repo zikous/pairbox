@@ -5,12 +5,18 @@ export type Route =
   | { name: "sign-in" }
   | { name: "sign-up" }
   | { name: "room"; id: string }
+  | { name: "recordings"; roomId: string }
+  | { name: "replay"; id: string }
   | { name: "not-found" };
 
 function parse(pathname: string): Route {
   if (pathname === "/") return { name: "home" };
   if (pathname === "/signin") return { name: "sign-in" };
   if (pathname === "/signup") return { name: "sign-up" };
+  const recordings = /^\/r\/([a-z0-9]+)\/recordings\/?$/.exec(pathname);
+  if (recordings?.[1]) return { name: "recordings", roomId: recordings[1] };
+  const replay = /^\/recordings\/([0-9a-f-]{36})\/?$/.exec(pathname);
+  if (replay?.[1]) return { name: "replay", id: replay[1] };
   const room = /^\/r\/([a-z0-9]+)\/?$/.exec(pathname);
   return room?.[1] ? { name: "room", id: room[1] } : { name: "not-found" };
 }

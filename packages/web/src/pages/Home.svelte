@@ -3,13 +3,11 @@
   import type { Room } from "@pairbox/shared";
   import { toast } from "svelte-sonner";
   import { api } from "$lib/api";
-  import Logo from "$lib/components/brand/Logo.svelte";
   import DeleteRoomDialog from "$lib/components/home/DeleteRoomDialog.svelte";
   import JoinForm from "$lib/components/home/JoinForm.svelte";
   import NewRoomDialog from "$lib/components/home/NewRoomDialog.svelte";
   import RoomList from "$lib/components/home/RoomList.svelte";
-  import ThemeMenu from "$lib/components/shared/ThemeMenu.svelte";
-  import UserMenu from "$lib/components/shared/UserMenu.svelte";
+  import PageHeader from "$lib/components/shared/PageHeader.svelte";
   import { Button } from "$lib/components/ui/button";
   import { errorMessage } from "$lib/format";
   import { auth } from "$lib/auth.svelte";
@@ -42,13 +40,7 @@
     class="dot-grid pointer-events-none absolute inset-x-0 top-0 h-80 [mask-image:linear-gradient(to_bottom,black,transparent)]"
   ></div>
 
-  <header class="relative mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
-    <Logo />
-    <div class="flex items-center gap-1">
-      <UserMenu />
-      <ThemeMenu />
-    </div>
-  </header>
+  <PageHeader />
 
   <main class="relative mx-auto max-w-3xl px-4 pt-14 pb-20">
     <section>

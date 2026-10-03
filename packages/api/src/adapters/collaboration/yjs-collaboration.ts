@@ -4,8 +4,12 @@ import * as syncProtocol from "y-protocols/sync";
 import * as decoding from "lib0/decoding";
 import * as encoding from "lib0/encoding";
 import type { WebSocket } from "ws";
-import { CLOSE_ROOM_NOT_FOUND, type RoomId } from "@pairbox/shared";
-import type { Collaboration, WorkspaceRepository } from "../../application/ports";
+import { CLOSE_ROOM_NOT_FOUND, type Participant, type RoomId } from "@pairbox/shared";
+import type {
+  Collaboration,
+  CollaborationObserver,
+  WorkspaceRepository,
+} from "../../application/ports";
 
 // Message types of the standard y-websocket protocol.
 const MESSAGE_SYNC = 0;
@@ -26,7 +30,10 @@ export class YjsCollaboration implements Collaboration {
   private readonly docs = new Map<RoomId, SharedDoc>();
   private readonly loading = new Map<RoomId, Promise<SharedDoc | undefined>>();
 
-  constructor(private readonly workspaces: WorkspaceRepository) {}
+  constructor(
+    private readonly workspaces: WorkspaceRepository,
+    private readonly observer?: CollaborationObserver,
+  ) {}
 
   async create(roomId: RoomId, initialCode: string): Promise<void> {
     const shared = this.track(roomId, new Y.Doc());
@@ -72,11 +79,16 @@ export class YjsCollaboration implements Collaboration {
   }
 
   private track(roomId: RoomId, doc: Y.Doc): SharedDoc {
+    const observer = this.observer;
     const shared = new SharedDoc(doc, {
       save: (state) => this.workspaces.save(roomId, state),
       unload: () => {
         if (this.docs.get(roomId) === shared) this.destroy(roomId);
       },
+      opened: (state) => observer?.opened(roomId, state),
+      closed: () => observer?.closed(roomId),
+      edited: (update, by) => observer?.edited(roomId, update, by),
+      presence: (update) => observer?.presence(roomId, update),
     });
     this.docs.set(roomId, shared);
     return shared;
@@ -92,17 +104,22 @@ class SharedDoc {
 
   constructor(
     readonly doc: Y.Doc,
-    private readonly storage: {
+    private readonly hooks: {
       save: (state: Uint8Array) => Promise<void>;
       unload: () => void;
+      opened: (state: Uint8Array) => void;
+      closed: () => void;
+      edited: (update: Uint8Array, by: Participant | undefined) => void;
+      presence: (update: Uint8Array) => void;
     },
   ) {
     this.awareness = new awarenessProtocol.Awareness(doc);
     this.awareness.setLocalState(null); // the server itself has no cursor
     this.scheduleUnload();
 
-    this.doc.on("update", (update: Uint8Array) => {
+    this.doc.on("update", (update: Uint8Array, origin: unknown) => {
       this.broadcast(message(MESSAGE_SYNC, (e) => syncProtocol.writeUpdate(e, update)));
+      this.hooks.edited(update, this.participantOf(origin as WebSocket));
       clearTimeout(this.saveTimer);
       this.saveTimer = setTimeout(() => void this.save(), SAVE_DELAY_MS);
     });
@@ -118,12 +135,14 @@ class SharedDoc {
         const changed = [...changes.added, ...changes.updated, ...changes.removed];
         const update = awarenessProtocol.encodeAwarenessUpdate(this.awareness, changed);
         this.broadcast(message(MESSAGE_AWARENESS, (e) => encoding.writeVarUint8Array(e, update)));
+        this.hooks.presence(update);
       },
     );
   }
 
   connect(socket: WebSocket, early: Buffer[]): void {
     clearTimeout(this.unloadTimer);
+    if (this.sockets.size === 0) this.hooks.opened(Y.encodeStateAsUpdate(this.doc));
     this.sockets.set(socket, new Set());
 
     let alive = true;
@@ -141,6 +160,7 @@ class SharedDoc {
       this.sockets.delete(socket);
       if (owned?.size) awarenessProtocol.removeAwarenessStates(this.awareness, [...owned], null);
       if (this.sockets.size === 0) {
+        this.hooks.closed();
         void this.save();
         this.scheduleUnload();
       }
@@ -164,15 +184,24 @@ class SharedDoc {
     this.doc.destroy();
   }
 
+  /** Who is behind a socket: the name and color they share through awareness. */
+  private participantOf(socket: WebSocket): Participant | undefined {
+    for (const clientId of this.sockets.get(socket) ?? []) {
+      const user = this.awareness.getStates().get(clientId)?.["user"] as Participant | undefined;
+      if (user) return { name: user.name, color: user.color };
+    }
+    return undefined;
+  }
+
   private async save(): Promise<void> {
     clearTimeout(this.saveTimer);
-    await this.storage.save(Y.encodeStateAsUpdate(this.doc)).catch(() => {});
+    await this.hooks.save(Y.encodeStateAsUpdate(this.doc)).catch(() => {});
   }
 
   private scheduleUnload(): void {
     clearTimeout(this.unloadTimer);
     this.unloadTimer = setTimeout(() => {
-      if (this.sockets.size === 0) this.storage.unload();
+      if (this.sockets.size === 0) this.hooks.unload();
     }, UNLOAD_AFTER_MS);
   }
 

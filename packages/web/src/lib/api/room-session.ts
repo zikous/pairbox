@@ -61,6 +61,7 @@ export async function joinRoom(room: Room, me: Participant): Promise<RoomSession
 
   try {
     await withTimeout(Promise.all([synced(provider), opened(socket)]), CONNECT_TIMEOUT_MS);
+    send({ type: "hello", participant: me });
   } catch (error) {
     leave();
     throw error;
@@ -73,6 +74,7 @@ export async function joinRoom(room: Room, me: Participant): Promise<RoomSession
     runtime: () => runtime,
     onRuntime: (listener) => runtimeChanged.add(listener),
     setRuntime: (next) => send({ type: "set_runtime", runtime: next }),
+    introduce: (participant) => send({ type: "hello", participant }),
     onDeleted: (listener) => deleted.add(listener),
     leave,
   };

@@ -3,9 +3,15 @@
   import { Terminal, type ITheme } from "@xterm/xterm";
   import { FitAddon } from "@xterm/addon-fit";
   import "@xterm/xterm/css/xterm.css";
-  import type { TerminalSession } from "$lib/api";
 
-  let { session, dark }: { session: TerminalSession; dark: boolean } = $props();
+  /** Where output comes from and keystrokes go: a live room, or a replay (no input). */
+  interface Source {
+    onOutput(listener: (data: string) => void): () => void;
+    input?(data: string): void;
+    resize?(cols: number, rows: number): void;
+  }
+
+  let { session, dark }: { session: Source; dark: boolean } = $props();
 
   const LIGHT: ITheme = {
     background: "#ffffff",
@@ -54,7 +60,7 @@
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(host);
-    const input = term.onData((data) => session.input(data));
+    const input = term.onData((data) => session.input?.(data));
 
     // Text drawn into a very narrow terminal gets wrapped, and resizing back leaves the prompt
     // scrambled. So the terminal never shrinks below MIN_COLUMNS (it keeps its last size while
@@ -68,7 +74,7 @@
       const size = fit.proposeDimensions();
       if (!size || size.cols < MIN_COLUMNS) return;
       if (size.cols !== term.cols || size.rows !== term.rows) term.resize(size.cols, size.rows);
-      session.resize(term.cols, term.rows); // so the real shell wraps lines at the same width
+      session.resize?.(term.cols, term.rows); // so the real shell wraps lines at the same width
       stopOutput ??= session.onOutput((data) => term.write(data));
     };
     const resize = new ResizeObserver(refit);

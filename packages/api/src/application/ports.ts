@@ -1,4 +1,13 @@
-import type { Room, RoomId, RunStatus, Runtime, User } from "@pairbox/shared";
+import type {
+  Participant,
+  Recording,
+  RecordingEvent,
+  Room,
+  RoomId,
+  RunStatus,
+  Runtime,
+  User,
+} from "@pairbox/shared";
 
 /** What the application needs from the outside world. Adapters implement these. */
 
@@ -73,4 +82,40 @@ export interface SandboxSession {
   run(code: string): void;
   stop(): void;
   close(): Promise<void>;
+}
+
+/** The index of recorded sessions. */
+export interface RecordingRepository {
+  create(recording: { id: string; roomId: RoomId; startedAt: Date }): Promise<void>;
+  update(
+    id: string,
+    changes: { endedAt?: Date; participants?: Participant[]; chunkCount?: number },
+  ): Promise<void>;
+  listByRoom(roomId: RoomId): Promise<Recording[]>;
+  get(id: string): Promise<(Recording & { chunkCount: number }) | undefined>;
+}
+
+/** Where recorded sessions are kept: a starting snapshot plus chunks of events. */
+export interface RecordingStore {
+  saveSnapshot(roomId: RoomId, recordingId: string, state: Uint8Array): Promise<void>;
+  loadSnapshot(roomId: RoomId, recordingId: string): Promise<Uint8Array>;
+  appendChunk(
+    roomId: RoomId,
+    recordingId: string,
+    seq: number,
+    events: RecordingEvent[],
+  ): Promise<void>;
+  readChunks(roomId: RoomId, recordingId: string, count: number): Promise<RecordingEvent[]>;
+  deleteRoom(roomId: RoomId): Promise<void>;
+}
+
+/** Told about everything that happens to the shared documents. */
+export interface CollaborationObserver {
+  /** The first person opened the room's document. `state` is the document at that moment. */
+  opened(roomId: RoomId, state: Uint8Array): void;
+  /** The last person closed it. */
+  closed(roomId: RoomId): void;
+  edited(roomId: RoomId, update: Uint8Array, by: Participant | undefined): void;
+  /** Cursors, selections and who is here. */
+  presence(roomId: RoomId, update: Uint8Array): void;
 }

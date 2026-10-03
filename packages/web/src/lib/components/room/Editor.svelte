@@ -22,11 +22,22 @@
     runtime: Runtime;
     keymap: Keymap;
     dark: boolean;
-    onrun: () => void;
+    onrun?: () => void;
+    /** For replays: shows the document without letting anyone change it. */
+    readonly?: boolean;
     oncursor?: (position: { line: number; column: number }) => void;
   }
 
-  let { doc, awareness, runtime, keymap, dark, onrun, oncursor }: Props = $props();
+  let {
+    doc,
+    awareness,
+    runtime,
+    keymap,
+    dark,
+    onrun,
+    oncursor,
+    readonly = false,
+  }: Props = $props();
 
   let host: HTMLDivElement;
   let view = $state.raw<EditorView>();
@@ -102,7 +113,7 @@
       {
         key: "Mod-Enter",
         run: () => {
-          onrun();
+          onrun?.();
           return true;
         },
       },
@@ -133,6 +144,7 @@
           keymapSlot.of(keymapExtension(keymap)),
           runShortcut,
           basicSetup,
+          readonly ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : [],
           tabIndentation,
           cursorReporter,
           languageSlot.of(languageExtension(runtime)),

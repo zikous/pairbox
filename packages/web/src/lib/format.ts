@@ -26,3 +26,14 @@ export const initials = (name: string): string =>
 
 export const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
+
+/** A duration in milliseconds as `m:ss` (or `h:mm:ss`). */
+export function clock(ms: number): string {
+  const total = Math.floor(ms / 1000);
+  const [h, m, s] = [Math.floor(total / 3600), Math.floor(total / 60) % 60, total % 60];
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+export const dateTime = (iso: string): string =>
+  new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });

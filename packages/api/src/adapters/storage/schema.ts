@@ -1,4 +1,14 @@
-import { customType, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  customType,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
+import type { Participant } from "@pairbox/shared";
 
 const bytes = customType<{ data: Uint8Array; driverData: Buffer }>({
   dataType: () => "bytea",
@@ -55,3 +65,19 @@ export const templates = pgTable("templates", {
   code: text().notNull(),
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 });
+
+/** Recorded sessions. The events themselves live in object storage, in `chunkCount` chunks. */
+export const recordings = pgTable(
+  "recordings",
+  {
+    id: uuid().primaryKey(),
+    roomId: text()
+      .notNull()
+      .references(() => rooms.id, { onDelete: "cascade" }),
+    startedAt: timestamp({ withTimezone: true }).notNull(),
+    endedAt: timestamp({ withTimezone: true }),
+    participants: jsonb().$type<Participant[]>().notNull().default([]),
+    chunkCount: integer().notNull().default(0),
+  },
+  (table) => [index().on(table.roomId)],
+);

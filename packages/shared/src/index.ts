@@ -9,6 +9,7 @@ export * from "./error";
 export * from "./json";
 export * from "./listeners";
 export * from "./participant";
+export * from "./recording";
 export * from "./room";
 export * from "./run";
 export * from "./runtime";

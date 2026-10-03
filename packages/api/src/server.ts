@@ -1,13 +1,15 @@
 import type { FastifyServerOptions } from "fastify";
 import { AuthService } from "./application/auth";
 import { RoomEvents } from "./application/events";
-import type { Sandboxes } from "./application/ports";
+import type { RecordingStore, Sandboxes } from "./application/ports";
+import { RecordingService } from "./application/recordings";
 import { RoomService } from "./application/rooms";
 import { TerminalService } from "./application/terminals";
 import { YjsCollaboration } from "./adapters/collaboration/yjs-collaboration";
 import { ScryptHasher } from "./adapters/security/scrypt-hasher";
 import { PublicAddress } from "./adapters/sharing/public-address";
 import type { Database } from "./adapters/storage/database";
+import { PostgresRecordingRepository } from "./adapters/storage/postgres-recordings";
 import { PostgresRoomRepository } from "./adapters/storage/postgres-rooms";
 import {
   PostgresSessionRepository,
@@ -20,13 +22,19 @@ import { buildApp } from "./adapters/transport/app";
 export function createServer(options: {
   db: Database;
   sandboxes: Sandboxes;
+  recordingStore: RecordingStore;
   publicUrl?: string | undefined;
   tunnelStatusUrl?: string | undefined;
   logger?: FastifyServerOptions["logger"];
 }) {
-  const { db, sandboxes, logger } = options;
-  const collaboration = new YjsCollaboration(new PostgresWorkspaceRepository(db));
+  const { db, sandboxes, recordingStore, logger } = options;
   const events = new RoomEvents();
+  const recordings = new RecordingService(
+    new PostgresRecordingRepository(db),
+    recordingStore,
+    events,
+  );
+  const collaboration = new YjsCollaboration(new PostgresWorkspaceRepository(db), recordings);
   const terminals = new TerminalService(sandboxes, collaboration, events);
 
   return buildApp({
@@ -35,7 +43,14 @@ export function createServer(options: {
       new PostgresSessionRepository(db),
       new ScryptHasher(),
     ),
-    rooms: new RoomService(new PostgresRoomRepository(db), collaboration, terminals, events),
+    rooms: new RoomService(
+      new PostgresRoomRepository(db),
+      collaboration,
+      terminals,
+      recordings,
+      events,
+    ),
+    recordings,
     terminals,
     events,
     collaboration,

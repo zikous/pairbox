@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowRight, Ellipsis, ExternalLink, Link, Plus, Trash2 } from "@lucide/svelte";
+  import { ArrowRight, Ellipsis, ExternalLink, History, Link, Plus, Trash2 } from "@lucide/svelte";
   import { RUNTIMES, type Room } from "@pairbox/shared";
   import { copyLink } from "$lib/clipboard";
   import LogoMark from "$lib/components/brand/LogoMark.svelte";
@@ -90,6 +90,9 @@
             <DropdownMenu.Content align="end" class="w-40">
               <DropdownMenu.Item onSelect={() => router.navigate(roomPath(room.id))}>
                 <ExternalLink /> Open
+              </DropdownMenu.Item>
+              <DropdownMenu.Item onSelect={() => router.navigate(`/r/${room.id}/recordings`)}>
+                <History /> Recordings
               </DropdownMenu.Item>
               <DropdownMenu.Item onSelect={() => copyLink(roomUrl(room.id))}>
                 <Link /> Copy link

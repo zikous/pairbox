@@ -20,6 +20,7 @@
   import { Button, buttonVariants } from "$lib/components/ui/button";
   import * as Resizable from "$lib/components/ui/resizable";
   import * as Select from "$lib/components/ui/select";
+  import * as Tooltip from "$lib/components/ui/tooltip";
   import { modKey } from "$lib/platform";
   import { prefs } from "$lib/prefs.svelte";
   import { roomUrl, router } from "$lib/router.svelte";
@@ -81,13 +82,14 @@
     };
   });
 
-  // Keep our name and color in sync with what others see.
+  // Keep our name and color in sync with what others see (and what recordings attribute).
   $effect(() => {
     session.awareness.setLocalStateField("user", {
       name: prefs.name,
       color: prefs.color,
       colorLight: `${prefs.color}33`,
     });
+    session.introduce({ name: prefs.name, color: prefs.color });
   });
 
   function run() {
@@ -121,6 +123,16 @@
 
 <RoomFrame {room}>
   {#snippet actions()}
+    <Tooltip.Root>
+      <Tooltip.Trigger
+        class="text-destructive flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium"
+      >
+        <span class="size-1.5 animate-pulse rounded-full bg-current"></span>Recording
+      </Tooltip.Trigger>
+      <Tooltip.Content class="max-w-60">
+        This session is recorded (code, cursors and terminal) so the room's owner can replay it.
+      </Tooltip.Content>
+    </Tooltip.Root>
     <Participants {people} />
     <CopyButton text={inviteUrl} class={buttonVariants({ variant: "outline", size: "sm" })}>
       <Link /> Invite

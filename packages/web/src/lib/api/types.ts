@@ -4,6 +4,8 @@ import type {
   CreateRoom,
   Credentials,
   Participant,
+  Recording,
+  RecordingReplay,
   Room,
   RoomId,
   RunStatus,
@@ -29,6 +31,12 @@ export interface RoomsApi {
   remove(id: RoomId): Promise<void>;
 }
 
+/** Recorded sessions of your rooms. */
+export interface RecordingsApi {
+  list(roomId: RoomId): Promise<Recording[]>;
+  get(id: string): Promise<RecordingReplay>;
+}
+
 /** A live connection to one room: the shared document, presence and terminal. */
 export interface RoomSession {
   readonly doc: Y.Doc;
@@ -37,6 +45,8 @@ export interface RoomSession {
   runtime(): Runtime;
   onRuntime(listener: (runtime: Runtime) => void): () => void;
   setRuntime(runtime: Runtime): void;
+  /** Tells the room who we are, so our terminal actions are attributed to us. */
+  introduce(me: Participant): void;
   /** Called when the host deletes the room while we're in it. */
   onDeleted(listener: () => void): () => void;
   leave(): void;
@@ -58,6 +68,7 @@ export interface TerminalSession {
 export interface Api {
   auth: AuthApi;
   rooms: RoomsApi;
+  recordings: RecordingsApi;
   /** Resolves once the room's current state has been received. */
   join(room: Room, me: Participant): Promise<RoomSession>;
 }

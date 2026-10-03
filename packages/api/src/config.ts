@@ -12,6 +12,12 @@ export const config = readEnv(
       /** The app's public address for invite links; else the tunnel's, if one runs. */
       PUBLIC_URL: z.url().optional(),
       TUNNEL_STATUS_URL: z.url().optional(),
+      /** Object storage (any S3-compatible service) for session recordings. */
+      S3_ENDPOINT: z.url(),
+      S3_REGION: z.string().default("us-east-1"),
+      S3_BUCKET: z.string(),
+      S3_ACCESS_KEY: z.string(),
+      S3_SECRET_KEY: z.string(),
       NODE_ENV: z.string().optional(),
     })
     .transform((env) => ({
@@ -22,6 +28,13 @@ export const config = readEnv(
       poolUrl: env.POOL_URL,
       publicUrl: env.PUBLIC_URL,
       tunnelStatusUrl: env.TUNNEL_STATUS_URL,
+      s3: {
+        endpoint: env.S3_ENDPOINT,
+        region: env.S3_REGION,
+        bucket: env.S3_BUCKET,
+        accessKeyId: env.S3_ACCESS_KEY,
+        secretAccessKey: env.S3_SECRET_KEY,
+      },
       production: env.NODE_ENV === "production",
       logger: env.NODE_ENV === "production" ? true : { transport: { target: "pino-pretty" } },
     })),

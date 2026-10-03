@@ -1,8 +1,14 @@
 import { sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
-import type { Room, RunStatus, ServerMessage } from "@pairbox/shared";
-import type { Sandboxes, SandboxSession } from "./application/ports";
+import type {
+  RecordingEvent,
+  RecordingReplay,
+  Room,
+  RunStatus,
+  ServerMessage,
+} from "@pairbox/shared";
+import type { RecordingStore, Sandboxes, SandboxSession } from "./application/ports";
 import { connectDatabase } from "./adapters/storage/database";
 import { createServer } from "./server";
 
@@ -32,9 +38,28 @@ const testSandboxes: Sandboxes = {
   },
 };
 
+/** Keeps recordings in memory instead of object storage. */
+function memoryRecordingStore(): RecordingStore {
+  const snapshots = new Map<string, Uint8Array>();
+  const chunks = new Map<string, RecordingEvent[][]>();
+  return {
+    saveSnapshot: async (_room, id, state) => void snapshots.set(id, state),
+    loadSnapshot: async (_room, id) => snapshots.get(id) ?? new Uint8Array(),
+    appendChunk: async (_room, id, seq, events) => {
+      const list = chunks.get(id) ?? [];
+      list[seq] = events;
+      chunks.set(id, list);
+    },
+    readChunks: async (_room, id, count) => (chunks.get(id) ?? []).slice(0, count).flat(),
+    deleteRoom: async () => {},
+  };
+}
+
+const recordingStore = memoryRecordingStore();
 let database: Awaited<ReturnType<typeof connectDatabase>>;
 let app: Awaited<ReturnType<typeof createServer>>;
-const start = async () => (app = await createServer({ db: database.db, sandboxes: testSandboxes }));
+const start = async () =>
+  (app = await createServer({ db: database.db, sandboxes: testSandboxes, recordingStore }));
 
 beforeAll(async () => {
   database = await connectDatabase(testDatabaseUrl);
@@ -188,5 +213,45 @@ describe("session socket", () => {
     const socket = new WebSocket(`${address.replace("http", "ws")}/ws/rooms/doesnotexist/session`);
     const code = await new Promise((resolve) => socket.on("close", resolve));
     expect(code).toBe(4404);
+  });
+});
+
+describe("recordings", () => {
+  it("records a session for the room's owner to replay, and no one else", async () => {
+    const ada = await signUp("ada@example.com");
+    const bob = await signUp("bob@example.com");
+    const room = await createRoom(ada);
+
+    // Opening the document starts the recording; the session socket carries terminal actions.
+    const sync = await app.injectWS(`/ws/rooms/${room.id}/sync`);
+    const session = await app.injectWS(`/ws/rooms/${room.id}/session`);
+    const send = (message: object) => session.send(JSON.stringify(message));
+    send({ type: "hello", participant: { name: "Ada", color: "#0090ff" } });
+    send({ type: "input", data: "ls\r" });
+    send({ type: "run" });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    session.terminate();
+    sync.terminate();
+
+    await app.close(); // ends the session and saves what it recorded
+    await start();
+
+    const list = await app.inject({ url: `/api/rooms/${room.id}/recordings`, headers: ada });
+    const [recording] = list.json();
+    expect(recording).toMatchObject({ participants: [{ name: "Ada" }] });
+    expect(recording.endedAt).not.toBeNull();
+
+    const replay: RecordingReplay = (
+      await app.inject({ url: `/api/recordings/${recording.id}`, headers: ada })
+    ).json();
+    const actions = replay.events.map((e) =>
+      "by" in e && e.by ? `${e.type}:${e.by.name}` : e.type,
+    );
+    expect(actions).toEqual(expect.arrayContaining(["join:Ada", "input:Ada", "run:Ada"]));
+    expect(replay.snapshot.length).toBeGreaterThan(0);
+
+    const asBob = (url: string) => app.inject({ url, headers: bob });
+    expect((await asBob(`/api/rooms/${room.id}/recordings`)).statusCode).toBe(403);
+    expect((await asBob(`/api/recordings/${recording.id}`)).statusCode).toBe(403);
   });
 });
