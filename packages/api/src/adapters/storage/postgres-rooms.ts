@@ -17,11 +17,16 @@ export class PostgresRoomRepository implements RoomRepository {
   }
 
   async save(room: OwnedRoom): Promise<void> {
-    const values = { ...room, createdAt: new Date(room.createdAt) };
+    const values = {
+      ...room,
+      startsAt: new Date(room.startsAt),
+      endsAt: new Date(room.endsAt),
+      createdAt: new Date(room.createdAt),
+    };
     await this.db
       .insert(rooms)
       .values(values)
-      .onConflictDoUpdate({ target: rooms.id, set: { name: room.name, runtime: room.runtime } });
+      .onConflictDoUpdate({ target: rooms.id, set: { name: room.name, endsAt: values.endsAt } });
   }
 
   async delete(id: RoomId): Promise<void> {
@@ -31,5 +36,11 @@ export class PostgresRoomRepository implements RoomRepository {
 
 function toRoom(row: typeof rooms.$inferSelect): OwnedRoom {
   if (!isRuntime(row.runtime)) throw new Error(`Room ${row.id} has unknown runtime`);
-  return { ...row, runtime: row.runtime, createdAt: row.createdAt.toISOString() };
+  return {
+    ...row,
+    runtime: row.runtime,
+    startsAt: row.startsAt.toISOString(),
+    endsAt: row.endsAt.toISOString(),
+    createdAt: row.createdAt.toISOString(),
+  };
 }

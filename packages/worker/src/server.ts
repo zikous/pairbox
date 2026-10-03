@@ -1,7 +1,7 @@
-import { timingSafeEqual } from "node:crypto";
 import Fastify, { type FastifyServerOptions } from "fastify";
 import websocket from "@fastify/websocket";
-import { INTERNAL_AUTH_HEADER, type Runtime } from "@pairbox/shared";
+import type { Runtime } from "@pairbox/shared";
+import { requireInternal } from "@pairbox/service";
 import { cleanMachine } from "./machine";
 import { openTerminal, sandboxUser } from "./terminal";
 
@@ -20,16 +20,10 @@ export async function createServer(options: {
   logger?: FastifyServerOptions["logger"];
 }) {
   const app = Fastify({ logger: options.logger ?? false });
-  const expected = Buffer.from(options.internalSecret);
-
-  app.addHook("onRequest", async (request, reply) => {
-    if (request.url === "/health") return;
-    const header = request.headers[INTERNAL_AUTH_HEADER];
-    const given = Buffer.from(typeof header === "string" ? header : "");
-    if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
-      return reply.code(401).send({ error: "Not a pairbox service" });
-    }
-  });
+  const internalOnly = requireInternal(options.internalSecret);
+  app.addHook("onRequest", (request, reply) =>
+    request.url === "/health" ? Promise.resolve() : internalOnly(request, reply),
+  );
 
   await app.register(websocket);
   const user = sandboxUser(options.sandboxUser);

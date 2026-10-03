@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { clock } from "$lib/format";
+  import { timecode } from "$lib/format";
   import type { Activity } from "$lib/replay.svelte";
 
   /** What happened in the session, in order. Click a line to jump there. */
@@ -22,7 +22,7 @@
         ]}
         onclick={() => onseek(item.t)}
       >
-        <span class="text-muted-foreground w-10 shrink-0 font-mono">{clock(item.t)}</span>
+        <span class="text-muted-foreground w-10 shrink-0 font-mono">{timecode(item.t)}</span>
         <span class="min-w-0">
           {#if item.by}<span class="font-medium" style:color={item.by.color}>{item.by.name}</span
             >{/if}

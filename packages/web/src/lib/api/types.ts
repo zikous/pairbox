@@ -1,13 +1,17 @@
 import type { Awareness } from "y-protocols/awareness";
 import type * as Y from "yjs";
 import type {
+  Availability,
   CreateRoom,
   Credentials,
+  JoinRequest,
+  JoinStatus,
   Participant,
-  Recording,
   RecordingReplay,
   Room,
   RoomId,
+  RoomSummary,
+  RoomView,
   RunStatus,
   Runtime,
   SandboxState,
@@ -22,19 +26,29 @@ export interface AuthApi {
   signOut(): Promise<void>;
 }
 
-/** Room management. Listing, creating and deleting are for signed-in users and their rooms. */
+/** Booked sessions (rooms). Listing, booking and deleting are for their signed-in owner. */
 export interface RoomsApi {
-  list(): Promise<Room[]>;
+  list(): Promise<RoomSummary[]>;
   /** Anyone can look a room up by id. Null when it doesn't exist. */
-  get(id: RoomId): Promise<Room | null>;
+  get(id: RoomId): Promise<RoomView | null>;
   create(input: CreateRoom): Promise<Room>;
   remove(id: RoomId): Promise<void>;
+  /** Ends a session before its slot does. */
+  end(id: RoomId): Promise<void>;
+  /** Which half hours of the day starting at `from` can still be booked. */
+  availability(runtime: Runtime, from: Date, durationMinutes: number): Promise<Availability>;
 }
 
-/** Recorded sessions of your rooms. */
+/** Guests ask to join a room; its owner lets them in or not. */
+export interface LobbyApi {
+  ask(roomId: RoomId, participant: Participant): Promise<string>;
+  status(roomId: RoomId, requestId: string): Promise<JoinStatus>;
+  decide(roomId: RoomId, requestId: string, admit: boolean): Promise<void>;
+}
+
+/** The recording of one of your sessions. */
 export interface RecordingsApi {
-  list(roomId: RoomId): Promise<Recording[]>;
-  get(id: string): Promise<RecordingReplay>;
+  get(roomId: RoomId): Promise<RecordingReplay>;
 }
 
 /** A live connection to one room: the shared document, presence and terminal. */
@@ -42,13 +56,12 @@ export interface RoomSession {
   readonly doc: Y.Doc;
   readonly awareness: Awareness;
   readonly terminal: TerminalSession;
-  runtime(): Runtime;
-  onRuntime(listener: (runtime: Runtime) => void): () => void;
-  setRuntime(runtime: Runtime): void;
   /** Tells the room who we are, so our terminal actions are attributed to us. */
   introduce(me: Participant): void;
-  /** Called when the host deletes the room while we're in it. */
-  onDeleted(listener: () => void): () => void;
+  /** The owner only: who is waiting to be let in. */
+  onJoinRequests(listener: (requests: JoinRequest[]) => void): () => void;
+  /** The session is over for everyone: its slot ended, or the room was deleted. */
+  onEnded(listener: (why: "time" | "deleted") => void): () => void;
   leave(): void;
 }
 
@@ -68,7 +81,11 @@ export interface TerminalSession {
 export interface Api {
   auth: AuthApi;
   rooms: RoomsApi;
+  lobby: LobbyApi;
   recordings: RecordingsApi;
-  /** Resolves once the room's current state has been received. */
-  join(room: Room, me: Participant): Promise<RoomSession>;
+  /**
+   * Connects to an open room, as its owner or as a guest with their ticket. Resolves once the
+   * room's current state has been received.
+   */
+  join(room: Room, me: Participant, ticket?: string): Promise<RoomSession>;
 }

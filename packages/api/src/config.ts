@@ -9,6 +9,7 @@ export const config = readEnv(
       INTERNAL_SECRET: z.string(),
       DATABASE_URL: z.string(),
       POOL_URL: z.url(),
+      SCHEDULER_URL: z.url(),
       /** The app's public address for invite links; else the tunnel's, if one runs. */
       PUBLIC_URL: z.url().optional(),
       TUNNEL_STATUS_URL: z.url().optional(),
@@ -26,6 +27,7 @@ export const config = readEnv(
       internalSecret: env.INTERNAL_SECRET,
       databaseUrl: env.DATABASE_URL,
       poolUrl: env.POOL_URL,
+      schedulerUrl: env.SCHEDULER_URL,
       publicUrl: env.PUBLIC_URL,
       tunnelStatusUrl: env.TUNNEL_STATUS_URL,
       s3: {

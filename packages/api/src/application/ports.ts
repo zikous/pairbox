@@ -1,4 +1,6 @@
 import type {
+  Availability,
+  Booking,
   Participant,
   Recording,
   RecordingEvent,
@@ -53,7 +55,17 @@ export interface Collaboration {
   create(roomId: RoomId, initialCode: string): Promise<void>;
   /** The room's current code, or "" when nobody has it open. */
   code(roomId: RoomId): string;
+  /** Saves the document and disconnects everyone: the session is over. */
+  end(roomId: RoomId): Promise<void>;
   destroy(roomId: RoomId): void;
+}
+
+/** The calendar: makes sure no more rooms run at once than there are workers. */
+export interface Scheduler {
+  /** Throws SlotTakenError when no worker is free for the whole slot. */
+  book(booking: Booking): Promise<void>;
+  cancel(roomId: RoomId): Promise<void>;
+  availability(runtime: Runtime, from: Date, durationMinutes: number): Promise<Availability>;
 }
 
 /** Hands out isolated machines (workers) to rooms. */
@@ -91,8 +103,9 @@ export interface RecordingRepository {
     id: string,
     changes: { endedAt?: Date; participants?: Participant[]; chunkCount?: number },
   ): Promise<void>;
-  listByRoom(roomId: RoomId): Promise<Recording[]>;
-  get(id: string): Promise<(Recording & { chunkCount: number }) | undefined>;
+  /** A room has at most one recording. */
+  getByRoom(roomId: RoomId): Promise<(Recording & { chunkCount: number }) | undefined>;
+  participantsByRoom(roomIds: RoomId[]): Promise<Map<RoomId, Participant[]>>;
 }
 
 /** Where recorded sessions are kept: a starting snapshot plus chunks of events. */

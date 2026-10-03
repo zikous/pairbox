@@ -39,7 +39,8 @@
     <AlertDialog.Header>
       <AlertDialog.Title>Delete “{room?.name}”?</AlertDialog.Title>
       <AlertDialog.Description>
-        The room and its code are deleted for everyone. This can't be undone.
+        The session, its code and its recordings are deleted. Its time slot is freed. This can't be
+        undone.
       </AlertDialog.Description>
     </AlertDialog.Header>
     <AlertDialog.Footer>
@@ -49,7 +50,7 @@
         disabled={deleting}
         onclick={confirm}
       >
-        {#if deleting}<Spinner /> Deleting…{:else}Delete room{/if}
+        {#if deleting}<Spinner /> Deleting…{:else}Delete session{/if}
       </AlertDialog.Action>
     </AlertDialog.Footer>
   </AlertDialog.Content>

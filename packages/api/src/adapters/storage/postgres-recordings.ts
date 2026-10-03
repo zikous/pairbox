@@ -1,4 +1,4 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import type { Participant, Recording, RoomId } from "@pairbox/shared";
 import type { RecordingRepository } from "../../application/ports";
 import type { Database } from "./database";
@@ -28,18 +28,18 @@ export class PostgresRecordingRepository implements RecordingRepository {
       .where(eq(recordings.id, id));
   }
 
-  async listByRoom(roomId: RoomId): Promise<Recording[]> {
-    const rows = await this.db
-      .select()
-      .from(recordings)
-      .where(eq(recordings.roomId, roomId))
-      .orderBy(desc(recordings.startedAt));
-    return rows.map(toRecording);
+  async getByRoom(roomId: RoomId) {
+    const [row] = await this.db.select().from(recordings).where(eq(recordings.roomId, roomId));
+    return row && { ...toRecording(row), chunkCount: row.chunkCount };
   }
 
-  async get(id: string) {
-    const [row] = await this.db.select().from(recordings).where(eq(recordings.id, id));
-    return row && { ...toRecording(row), chunkCount: row.chunkCount };
+  async participantsByRoom(roomIds: RoomId[]): Promise<Map<RoomId, Participant[]>> {
+    if (roomIds.length === 0) return new Map();
+    const rows = await this.db
+      .select({ roomId: recordings.roomId, participants: recordings.participants })
+      .from(recordings)
+      .where(inArray(recordings.roomId, roomIds));
+    return new Map(rows.map((row) => [row.roomId, row.participants]));
   }
 }
 

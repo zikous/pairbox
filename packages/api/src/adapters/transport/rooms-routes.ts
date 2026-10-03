@@ -1,17 +1,30 @@
 import { z } from "zod";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
-import { CreateRoomSchema, ErrorSchema, RoomIdSchema, RoomSchema } from "@pairbox/shared";
+import {
+  AvailabilityQuerySchema,
+  AvailabilitySchema,
+  CreateRoomSchema,
+  ErrorSchema,
+  RoomIdSchema,
+  RoomSchema,
+  RoomSummarySchema,
+  RoomViewSchema,
+} from "@pairbox/shared";
 import type { AuthService } from "../../application/auth";
+import type { Scheduler } from "../../application/ports";
+import type { RecordingService } from "../../application/recordings";
 import type { RoomService } from "../../application/rooms";
-import { requireUser, signedInUser } from "./session";
+import { requireUser, sessionToken, signedInUser } from "./session";
 
 const params = z.object({ id: RoomIdSchema });
 const signedIn = [{ session: [] }];
 
-export const roomsRoutes: FastifyPluginAsyncZod<{ rooms: RoomService; auth: AuthService }> = async (
-  app,
-  { rooms, auth },
-) => {
+export const roomsRoutes: FastifyPluginAsyncZod<{
+  rooms: RoomService;
+  recordings: RecordingService;
+  auth: AuthService;
+  scheduler: Scheduler;
+}> = async (app, { rooms, recordings, auth, scheduler }) => {
   const onRequest = requireUser(auth);
 
   app.get(
@@ -19,13 +32,17 @@ export const roomsRoutes: FastifyPluginAsyncZod<{ rooms: RoomService; auth: Auth
     {
       onRequest,
       schema: {
-        summary: "List your rooms",
+        summary: "List your sessions",
         tags: ["rooms"],
         security: signedIn,
-        response: { 200: z.array(RoomSchema), 401: ErrorSchema },
+        response: { 200: z.array(RoomSummarySchema), 401: ErrorSchema },
       },
     },
-    (request) => rooms.list(signedInUser(request).id),
+    async (request) => {
+      const list = await rooms.list(signedInUser(request).id);
+      const participants = await recordings.participants(list.map((room) => room.id));
+      return list.map((room) => ({ ...room, participants: participants.get(room.id) ?? [] }));
+    },
   );
 
   app.post(
@@ -33,11 +50,12 @@ export const roomsRoutes: FastifyPluginAsyncZod<{ rooms: RoomService; auth: Auth
     {
       onRequest,
       schema: {
-        summary: "Create a room",
+        summary: "Book a session",
+        description: "409 when no sandbox is free for the whole slot.",
         tags: ["rooms"],
         security: signedIn,
         body: CreateRoomSchema,
-        response: { 201: RoomSchema, 400: ErrorSchema, 401: ErrorSchema },
+        response: { 201: RoomSchema, 400: ErrorSchema, 401: ErrorSchema, 409: ErrorSchema },
       },
     },
     async (request, reply) =>
@@ -45,17 +63,60 @@ export const roomsRoutes: FastifyPluginAsyncZod<{ rooms: RoomService; auth: Auth
   );
 
   app.get(
+    "/availability",
+    {
+      onRequest,
+      schema: {
+        summary: "Which start times are free",
+        description: "Every half hour over the 24 hours from `from`, for a session of that length.",
+        tags: ["rooms"],
+        security: signedIn,
+        querystring: AvailabilityQuerySchema,
+        response: { 200: AvailabilitySchema, 401: ErrorSchema },
+      },
+    },
+    (request) => {
+      const { runtime, from, durationMinutes } = request.query;
+      return scheduler.availability(runtime, new Date(from), durationMinutes);
+    },
+  );
+
+  app.get(
     "/:id",
     {
       schema: {
         summary: "Get a room",
-        description: "Public: anyone with the room's link can look it up.",
+        description: "Public: anyone with the room's link can look it up. Says if it's yours.",
         tags: ["rooms"],
         params,
-        response: { 200: RoomSchema, 404: ErrorSchema },
+        response: { 200: RoomViewSchema, 404: ErrorSchema },
       },
     },
-    (request) => rooms.get(request.params.id),
+    async (request) => {
+      const room = await rooms.get(request.params.id);
+      const token = sessionToken(request);
+      const user = token ? await auth.userFor(token) : undefined;
+      return { ...room, owner: user?.id === room.ownerId };
+    },
+  );
+
+  app.post(
+    "/:id/end",
+    {
+      onRequest,
+      schema: {
+        summary: "End a session now",
+        description: "Disconnects everyone, frees the rest of the slot and closes the recording.",
+        tags: ["rooms"],
+        security: signedIn,
+        params,
+        response: { 204: z.null(), 403: ErrorSchema, 404: ErrorSchema },
+      },
+    },
+    async (request, reply) => {
+      await rooms.end(signedInUser(request).id, request.params.id);
+      return reply.code(204).send(null);
+    },
   );
 
   app.delete(

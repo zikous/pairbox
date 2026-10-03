@@ -6,6 +6,8 @@ import {
   InvalidInputError,
   NotFoundError,
   NotRoomOwnerError,
+  SessionNotOpenError,
+  SlotTakenError,
 } from "../../application/errors";
 
 const STATUS: [new (...args: never[]) => Error, number][] = [
@@ -14,6 +16,8 @@ const STATUS: [new (...args: never[]) => Error, number][] = [
   [NotRoomOwnerError, 403],
   [NotFoundError, 404],
   [EmailTakenError, 409],
+  [SlotTakenError, 409],
+  [SessionNotOpenError, 409],
 ];
 
 /** Turns errors into HTTP responses with an `{ error }` body. */

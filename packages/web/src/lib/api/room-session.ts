@@ -6,7 +6,7 @@ import {
   type Participant,
   type Room,
   type RunStatus,
-  type Runtime,
+  type JoinRequest,
   type SandboxState,
   type ServerMessage,
 } from "@pairbox/shared";
@@ -20,37 +20,34 @@ const SCROLLBACK_MAX = 64_000;
  * - sync:    the shared document and presence, through the stock y-websocket client
  * - session: terminal and run controls, as JSON messages from @pairbox/shared
  */
-export async function joinRoom(room: Room, me: Participant): Promise<RoomSession> {
+export async function joinRoom(room: Room, me: Participant, ticket?: string): Promise<RoomSession> {
   const base = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/rooms`;
+  // Guests prove they were let in with their ticket; the owner is known by their cookie.
+  const params: Record<string, string> = ticket ? { ticket } : {};
 
   const doc = new Y.Doc();
-  const provider = new WebsocketProvider(base, `${room.id}/sync`, doc, { disableBc: true });
+  const provider = new WebsocketProvider(base, `${room.id}/sync`, doc, { disableBc: true, params });
   provider.awareness.setLocalStateField("user", {
     name: me.name,
     color: me.color,
     colorLight: `${me.color}33`,
   });
 
-  const socket = new WebSocket(`${base}/${room.id}/session`);
+  const socket = new WebSocket(`${base}/${room.id}/session?${new URLSearchParams(params)}`);
   const send = (message: ClientMessage) => {
     if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
   };
 
-  let runtime = room.runtime;
-  const runtimeChanged = new Listeners<Runtime>();
-  const deleted = new Listeners();
+  const joinRequests = new Listeners<JoinRequest[]>();
+  const ended = new Listeners<"time" | "deleted">();
   const terminal = new RoomTerminal(send);
 
   socket.addEventListener("message", (event: MessageEvent<string>) => {
     const message = JSON.parse(event.data) as ServerMessage;
-    if (message.type === "runtime") {
-      runtime = message.runtime;
-      runtimeChanged.emit(runtime);
-    } else if (message.type === "room_deleted") {
-      deleted.emit();
-    } else {
-      terminal.receive(message);
-    }
+    if (message.type === "join_requests") joinRequests.emit(message.requests);
+    else if (message.type === "session_ended") ended.emit("time");
+    else if (message.type === "room_deleted") ended.emit("deleted");
+    else terminal.receive(message);
   });
 
   const leave = () => {
@@ -71,11 +68,9 @@ export async function joinRoom(room: Room, me: Participant): Promise<RoomSession
     doc,
     awareness: provider.awareness,
     terminal,
-    runtime: () => runtime,
-    onRuntime: (listener) => runtimeChanged.add(listener),
-    setRuntime: (next) => send({ type: "set_runtime", runtime: next }),
     introduce: (participant) => send({ type: "hello", participant }),
-    onDeleted: (listener) => deleted.add(listener),
+    onJoinRequests: (listener) => joinRequests.add(listener),
+    onEnded: (listener) => ended.add(listener),
     leave,
   };
 }

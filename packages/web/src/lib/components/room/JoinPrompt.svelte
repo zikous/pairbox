@@ -7,15 +7,27 @@
   import { Input } from "$lib/components/ui/input";
   import { prefs } from "$lib/prefs.svelte";
 
-  /** Asks for a display name before someone enters a room for the first time. */
-  let { room }: { room: Room } = $props();
+  /**
+   * Asks who you are before entering. Guests use it to ask the owner to let them in; the
+   * owner just picks the name others will see.
+   */
+  interface Props {
+    room: Room;
+    action: string;
+    hint: string;
+    onsubmit: () => void;
+  }
+
+  let { room, action, hint, onsubmit }: Props = $props();
 
   let name = $state(prefs.name);
   const validName = $derived(normalizeDisplayName(name));
 
   function submit(event: SubmitEvent) {
     event.preventDefault();
-    if (validName) prefs.name = validName;
+    if (!validName) return;
+    prefs.name = validName;
+    onsubmit();
   }
 </script>
 
@@ -33,9 +45,9 @@
       <Field.Field>
         <Field.Label for="your-name">Your name</Field.Label>
         <Input id="your-name" bind:value={name} placeholder="Ada Lovelace" maxlength={32} />
-        <Field.Description>Shown next to your cursor.</Field.Description>
+        <Field.Description>{hint}</Field.Description>
       </Field.Field>
-      <Button type="submit" class="w-full" disabled={!validName}>Join room</Button>
+      <Button type="submit" class="w-full" disabled={!validName}>{action}</Button>
     </div>
   </form>
 </div>

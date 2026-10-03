@@ -8,7 +8,9 @@ import type {
   RunStatus,
   ServerMessage,
 } from "@pairbox/shared";
-import type { RecordingStore, Sandboxes, SandboxSession } from "./application/ports";
+import type { Booking } from "@pairbox/shared";
+import type { RecordingStore, Sandboxes, SandboxSession, Scheduler } from "./application/ports";
+import { SlotTakenError } from "./application/errors";
 import { connectDatabase } from "./adapters/storage/database";
 import { createServer } from "./server";
 
@@ -55,11 +57,35 @@ function memoryRecordingStore(): RecordingStore {
   };
 }
 
+/** A calendar with one worker per runtime: overlapping bookings of a runtime are refused. */
+function oneWorkerScheduler(): Scheduler {
+  const bookings: Booking[] = [];
+  const overlaps = (a: Booking, b: Booking) =>
+    a.runtime === b.runtime && a.startsAt < b.endsAt && b.startsAt < a.endsAt;
+  return {
+    async book(booking) {
+      if (bookings.some((other) => overlaps(other, booking))) throw new SlotTakenError();
+      bookings.push(booking);
+    },
+    async cancel(roomId) {
+      const index = bookings.findIndex((b) => b.roomId === roomId);
+      if (index >= 0) bookings.splice(index, 1);
+    },
+    availability: async () => ({ slots: [] }),
+  };
+}
+
 const recordingStore = memoryRecordingStore();
+let scheduler = oneWorkerScheduler();
 let database: Awaited<ReturnType<typeof connectDatabase>>;
 let app: Awaited<ReturnType<typeof createServer>>;
 const start = async () =>
-  (app = await createServer({ db: database.db, sandboxes: testSandboxes, recordingStore }));
+  (app = await createServer({
+    db: database.db,
+    sandboxes: testSandboxes,
+    scheduler,
+    recordingStore,
+  }));
 
 beforeAll(async () => {
   database = await connectDatabase(testDatabaseUrl);
@@ -67,6 +93,7 @@ beforeAll(async () => {
 afterAll(() => database.close());
 beforeEach(async () => {
   await database.db.execute(sql`truncate users, templates cascade`);
+  scheduler = oneWorkerScheduler();
   await start();
 });
 afterEach(() => app.close());
@@ -84,15 +111,30 @@ async function signUp(email = "ada@example.com", password = "correct horse") {
   return { cookie: `pairbox_session=${cookie?.value}` };
 }
 
-async function createRoom(headers: { cookie: string }, name = "Interview"): Promise<Room> {
+/** Books a room starting now (or `inMinutes` from now) for an hour. */
+async function createRoom(
+  headers: { cookie: string },
+  { name = "Interview", runtime = "python", inMinutes = 0 } = {},
+): Promise<Room> {
   const response = await app.inject({
     method: "POST",
     url: "/api/rooms",
     headers,
-    payload: { name, runtime: "python" },
+    payload: { name, runtime, startsAt: minutesFromNow(inMinutes), durationMinutes: 60 },
   });
   expect(response.statusCode).toBe(201);
   return response.json();
+}
+
+const minutesFromNow = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString();
+
+/** Opens a room's WebSocket, as the owner (cookie) or a guest (ticket). */
+const connect = (path: string, headers?: { cookie: string }) =>
+  app.injectWS(path, headers ? { headers } : {});
+
+/** Resolves with the code the server closes a socket with. */
+function closeCode(socket: { on(event: "close", listener: (code: number) => void): unknown }) {
+  return new Promise<number>((resolve) => socket.on("close", resolve));
 }
 
 describe("auth", () => {
@@ -132,28 +174,48 @@ describe("auth", () => {
 });
 
 describe("rooms", () => {
-  it("needs a signed-in user to list, create and delete", async () => {
+  it("needs a signed-in user to list and book", async () => {
     expect((await app.inject({ url: "/api/rooms" })).statusCode).toBe(401);
-    expect((await app.inject({ method: "POST", url: "/api/rooms", payload: {} })).statusCode).toBe(
-      401,
-    );
+    const book = await app.inject({ method: "POST", url: "/api/rooms", payload: {} });
+    expect(book.statusCode).toBe(401);
   });
 
-  it("creates, reads, lists and deletes a room", async () => {
+  it("books, reads, lists and deletes a session", async () => {
     const headers = await signUp();
-    const room = await createRoom(headers, "  Mock   interview ");
+    const room = await createRoom(headers, { name: "  Mock   interview " });
     expect(room).toMatchObject({ name: "Mock interview", runtime: "python" });
+    expect(Date.parse(room.endsAt) - Date.parse(room.startsAt)).toBe(60 * 60_000);
 
-    // Anyone with the link can look a room up.
-    expect((await app.inject({ url: `/api/rooms/${room.id}` })).json()).toEqual(room);
-    expect((await app.inject({ url: "/api/rooms", headers })).json()).toEqual([room]);
+    // Anyone with the link can look a room up; only its owner is told it's theirs.
+    const asGuest = await app.inject({ url: `/api/rooms/${room.id}` });
+    expect(asGuest.json()).toEqual({ ...room, owner: false });
+    const asOwner = await app.inject({ url: `/api/rooms/${room.id}`, headers });
+    expect(asOwner.json()).toMatchObject({ owner: true });
+    expect((await app.inject({ url: "/api/rooms", headers })).json()).toEqual([
+      { ...room, participants: [] },
+    ]);
 
     const deleted = await app.inject({ method: "DELETE", url: `/api/rooms/${room.id}`, headers });
     expect(deleted.statusCode).toBe(204);
     expect((await app.inject({ url: `/api/rooms/${room.id}` })).statusCode).toBe(404);
   });
 
-  it("keeps each user's rooms to themselves", async () => {
+  it("refuses a slot when no sandbox is free for it", async () => {
+    const headers = await signUp();
+    await createRoom(headers);
+    const book = (runtime: string, inMinutes: number) =>
+      app.inject({
+        method: "POST",
+        url: "/api/rooms",
+        headers,
+        payload: { name: "x", runtime, startsAt: minutesFromNow(inMinutes), durationMinutes: 60 },
+      });
+    expect((await book("python", 30)).statusCode).toBe(409); // overlaps the first
+    expect((await book("python", 60)).statusCode).toBe(201); // right after it
+    expect((await book("typescript", 0)).statusCode).toBe(201); // another runtime's worker
+  });
+
+  it("keeps each user's sessions to themselves", async () => {
     const ada = await signUp("ada@example.com");
     const bob = await signUp("bob@example.com");
     const room = await createRoom(ada);
@@ -171,8 +233,16 @@ describe("rooms", () => {
     const headers = await signUp();
     const bad = (payload: object) =>
       app.inject({ method: "POST", url: "/api/rooms", headers, payload });
-    expect((await bad({ name: "   ", runtime: "python" })).statusCode).toBe(400);
-    expect((await bad({ name: "x", runtime: "cobol" })).statusCode).toBe(400);
+    const valid = {
+      name: "x",
+      runtime: "python",
+      startsAt: minutesFromNow(0),
+      durationMinutes: 60,
+    };
+    expect((await bad({ ...valid, name: "   " })).statusCode).toBe(400);
+    expect((await bad({ ...valid, runtime: "cobol" })).statusCode).toBe(400);
+    expect((await bad({ ...valid, durationMinutes: 45 })).statusCode).toBe(400);
+    expect((await bad({ ...valid, startsAt: minutesFromNow(-60) })).statusCode).toBe(400);
     expect((await app.inject({ url: "/api/rooms/NOT_AN_ID" })).statusCode).toBe(400);
   });
 
@@ -181,7 +251,7 @@ describe("rooms", () => {
     await app.close();
     await start();
 
-    expect((await app.inject({ url: `/api/rooms/${room.id}` })).json()).toEqual(room);
+    expect((await app.inject({ url: `/api/rooms/${room.id}` })).json()).toMatchObject(room);
     const { rows } = await database.db.execute<{ size: number }>(
       sql`select length(state) as size from workspaces where room_id = ${room.id}`,
     );
@@ -189,10 +259,69 @@ describe("rooms", () => {
   });
 });
 
+describe("lobby", () => {
+  const ask = (roomId: string) =>
+    app.inject({
+      method: "POST",
+      url: `/api/rooms/${roomId}/join-requests`,
+      payload: { participant: { name: "Grace", color: "#30a46c" } },
+    });
+  const status = (roomId: string, requestId: string) =>
+    app.inject({ url: `/api/rooms/${roomId}/join-requests/${requestId}` }).then((r) => r.json());
+
+  it("keeps guests out until the owner lets them in", async () => {
+    const owner = await signUp();
+    const room = await createRoom(owner);
+
+    expect(await closeCode(await connect(`/ws/rooms/${room.id}/session`))).toBe(4403);
+
+    const { id } = (await ask(room.id)).json();
+    expect(await status(room.id, id)).toEqual({ status: "pending" });
+    const admit = await app.inject({
+      method: "POST",
+      url: `/api/rooms/${room.id}/join-requests/${id}/admit`,
+      headers: owner,
+    });
+    expect(admit.statusCode).toBe(204);
+
+    const { ticket } = await status(room.id, id);
+    const guest = await connect(`/ws/rooms/${room.id}/session?ticket=${ticket}`);
+    const messages: ServerMessage[] = [];
+    guest.on("message", (data) => messages.push(JSON.parse(data.toString())));
+    await expect
+      .poll(() => messages.some((m) => m.type === "sandbox"), { timeout: 2000 })
+      .toBe(true);
+    guest.terminate();
+  });
+
+  it("turned-away guests get no ticket, and only the owner decides", async () => {
+    const owner = await signUp("ada@example.com");
+    const stranger = await signUp("bob@example.com");
+    const room = await createRoom(owner);
+    const { id } = (await ask(room.id)).json();
+    const decide = (decision: string, headers: { cookie: string }) =>
+      app.inject({
+        method: "POST",
+        url: `/api/rooms/${room.id}/join-requests/${id}/${decision}`,
+        headers,
+      });
+
+    expect((await decide("admit", stranger)).statusCode).toBe(403);
+    expect((await decide("deny", owner)).statusCode).toBe(204);
+    expect(await status(room.id, id)).toEqual({ status: "denied" });
+  });
+
+  it("can't be joined before the session starts", async () => {
+    const room = await createRoom(await signUp(), { inMinutes: 90 });
+    expect((await ask(room.id)).statusCode).toBe(409);
+  });
+});
+
 describe("session socket", () => {
   it("shares the terminal and runs code", async () => {
-    const room = await createRoom(await signUp());
-    const socket = await app.injectWS(`/ws/rooms/${room.id}/session`);
+    const owner = await signUp();
+    const room = await createRoom(owner);
+    const socket = await connect(`/ws/rooms/${room.id}/session`, owner);
     const messages: ServerMessage[] = [];
     socket.on("message", (data) => messages.push(JSON.parse(data.toString())));
     const waitFor = (predicate: (m: ServerMessage) => boolean) =>
@@ -202,56 +331,64 @@ describe("session socket", () => {
     socket.send(JSON.stringify({ type: "run" }));
     await waitFor((m) => m.type === "output" && m.data.startsWith("ran: name ="));
     await waitFor((m) => m.type === "status" && m.status.state === "exited");
-
-    socket.send(JSON.stringify({ type: "set_runtime", runtime: "typescript" }));
-    await waitFor((m) => m.type === "runtime" && m.runtime === "typescript");
     socket.terminate();
   });
 
   it("closes with 4404 for an unknown room", async () => {
     const address = await app.listen({ port: 0, host: "127.0.0.1" });
     const socket = new WebSocket(`${address.replace("http", "ws")}/ws/rooms/doesnotexist/session`);
-    const code = await new Promise((resolve) => socket.on("close", resolve));
-    expect(code).toBe(4404);
+    expect(await closeCode(socket)).toBe(4404);
   });
 });
 
 describe("recordings", () => {
-  it("records a session for the room's owner to replay, and no one else", async () => {
+  it("records one recording per session, for its owner only", async () => {
     const ada = await signUp("ada@example.com");
     const bob = await signUp("bob@example.com");
     const room = await createRoom(ada);
 
-    // Opening the document starts the recording; the session socket carries terminal actions.
-    const sync = await app.injectWS(`/ws/rooms/${room.id}/sync`);
-    const session = await app.injectWS(`/ws/rooms/${room.id}/session`);
-    const send = (message: object) => session.send(JSON.stringify(message));
-    send({ type: "hello", participant: { name: "Ada", color: "#0090ff" } });
-    send({ type: "input", data: "ls\r" });
-    send({ type: "run" });
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    session.terminate();
-    sync.terminate();
-
-    await app.close(); // ends the session and saves what it recorded
-    await start();
-
-    const list = await app.inject({ url: `/api/rooms/${room.id}/recordings`, headers: ada });
-    const [recording] = list.json();
-    expect(recording).toMatchObject({ participants: [{ name: "Ada" }] });
-    expect(recording.endedAt).not.toBeNull();
+    // Two visits to the same session: the second continues the same recording.
+    for (const command of ["ls\r", "pwd\r"]) {
+      const sync = await connect(`/ws/rooms/${room.id}/sync`, ada);
+      const session = await connect(`/ws/rooms/${room.id}/session`, ada);
+      const send = (message: object) => session.send(JSON.stringify(message));
+      send({ type: "hello", participant: { name: "Ada", color: "#0090ff" } });
+      send({ type: "input", data: command });
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      session.terminate();
+      sync.terminate();
+      await new Promise((resolve) => setTimeout(resolve, 150)); // leaving saves what was recorded
+    }
 
     const replay: RecordingReplay = (
-      await app.inject({ url: `/api/recordings/${recording.id}`, headers: ada })
+      await app.inject({ url: `/api/rooms/${room.id}/recording`, headers: ada })
     ).json();
-    const actions = replay.events.map((e) =>
-      "by" in e && e.by ? `${e.type}:${e.by.name}` : e.type,
-    );
-    expect(actions).toEqual(expect.arrayContaining(["join:Ada", "input:Ada", "run:Ada"]));
+    const inputs = replay.events.flatMap((e) => (e.type === "input" ? [e.data] : []));
+    expect(inputs).toEqual(["ls\r", "pwd\r"]);
+    expect(replay.recording.participants).toEqual([{ name: "Ada", color: "#0090ff" }]);
     expect(replay.snapshot.length).toBeGreaterThan(0);
 
-    const asBob = (url: string) => app.inject({ url, headers: bob });
-    expect((await asBob(`/api/rooms/${room.id}/recordings`)).statusCode).toBe(403);
-    expect((await asBob(`/api/recordings/${recording.id}`)).statusCode).toBe(403);
+    const asBob = await app.inject({ url: `/api/rooms/${room.id}/recording`, headers: bob });
+    expect(asBob.statusCode).toBe(403);
+  });
+
+  it("ending a session early disconnects everyone and frees the slot", async () => {
+    const owner = await signUp();
+    const room = await createRoom(owner);
+    const session = await connect(`/ws/rooms/${room.id}/session`, owner);
+    const messages: ServerMessage[] = [];
+    session.on("message", (data) => messages.push(JSON.parse(data.toString())));
+
+    const end = await app.inject({
+      method: "POST",
+      url: `/api/rooms/${room.id}/end`,
+      headers: owner,
+    });
+    expect(end.statusCode).toBe(204);
+    await expect.poll(() => messages.some((m) => m.type === "session_ended")).toBe(true);
+
+    const ended: Room = (await app.inject({ url: `/api/rooms/${room.id}` })).json();
+    expect(Date.parse(ended.endsAt)).toBeLessThanOrEqual(Date.now());
+    await createRoom(owner); // the rest of the slot can be booked again
   });
 });

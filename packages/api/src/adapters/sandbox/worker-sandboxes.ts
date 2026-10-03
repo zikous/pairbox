@@ -1,6 +1,6 @@
 import { WebSocket } from "ws";
+import { internalHeaders } from "@pairbox/service";
 import {
-  INTERNAL_AUTH_HEADER,
   Listeners,
   type Runtime,
   type Reservation,
@@ -43,7 +43,7 @@ export class WorkerSandboxes implements Sandboxes {
 
   private connect(workerUrl: string, signal: AbortSignal): Promise<WebSocket> {
     const socket = new WebSocket(`${workerUrl.replace(/^http/, "ws")}/terminal`, {
-      headers: { [INTERNAL_AUTH_HEADER]: this.internalSecret },
+      headers: internalHeaders(this.internalSecret),
     });
     return new Promise((resolve, reject) => {
       signal.addEventListener("abort", () => socket.terminate(), { once: true });
@@ -57,7 +57,7 @@ export class WorkerSandboxes implements Sandboxes {
     const response = await fetch(`${this.poolUrl}${path}`, {
       method,
       headers: {
-        [INTERNAL_AUTH_HEADER]: this.internalSecret,
+        ...internalHeaders(this.internalSecret),
         ...(body ? { "content-type": "application/json" } : {}),
       },
       body: body ? JSON.stringify(body) : null,

@@ -1,8 +1,15 @@
-import { normalizeRoomName, type Runtime, type Room, type RoomId } from "@pairbox/shared";
+import {
+  normalizeRoomName,
+  type CreateRoom,
+  type Room,
+  type RoomId,
+  type Runtime,
+} from "@pairbox/shared";
 import { InvalidInputError, NotRoomOwnerError, RoomNotFoundError } from "./errors";
 import type { RoomEvents } from "./events";
-import type { Collaboration, OwnedRoom, RoomRepository } from "./ports";
+import type { Collaboration, OwnedRoom, RoomRepository, Scheduler } from "./ports";
 import type { RecordingService } from "./recordings";
+import type { SessionClock } from "./session-clock";
 import type { TerminalService } from "./terminals";
 
 const STARTER_CODE: Record<Runtime, string> = {
@@ -12,6 +19,8 @@ const STARTER_CODE: Record<Runtime, string> = {
 };
 
 const ID_ALPHABET = "abcdefghijkmnpqrstuvwxyz23456789";
+/** A session can be booked for a time that started a moment ago (the form took a while). */
+const START_GRACE_MS = 5 * 60_000;
 
 /** 10 characters from a 32-letter alphabet: 50 bits, hard to guess. */
 function newRoomId(): RoomId {
@@ -19,19 +28,22 @@ function newRoomId(): RoomId {
   return Array.from(bytes, (b) => ID_ALPHABET[b % ID_ALPHABET.length]).join("");
 }
 
+/** Rooms are booked sessions: a name, a runtime and a time slot, owned by one user. */
 export class RoomService {
   constructor(
     private readonly repository: RoomRepository,
+    private readonly scheduler: Scheduler,
     private readonly collaboration: Collaboration,
     private readonly terminals: TerminalService,
     private readonly recordings: RecordingService,
+    private readonly clock: SessionClock,
     private readonly events: RoomEvents,
   ) {}
 
-  /** The user's rooms, newest first. */
+  /** The user's rooms, soonest first. */
   async list(ownerId: string): Promise<Room[]> {
     const rooms = await this.repository.listByOwner(ownerId);
-    return rooms.toSorted((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return rooms.toSorted((a, b) => a.startsAt.localeCompare(b.startsAt));
   }
 
   find(id: RoomId): Promise<OwnedRoom | undefined> {
@@ -51,37 +63,52 @@ export class RoomService {
     return room;
   }
 
-  async create(ownerId: string, input: { name: string; runtime: Runtime }): Promise<Room> {
+  /** Books a session. Fails with SlotTakenError when no worker is free for the whole slot. */
+  async create(ownerId: string, input: CreateRoom): Promise<Room> {
     const name = normalizeRoomName(input.name);
     if (!name) throw new InvalidInputError("Room name is empty or too long");
+    const start = Date.parse(input.startsAt);
+    if (start < Date.now() - START_GRACE_MS)
+      throw new InvalidInputError("Pick a time in the future");
 
     const room: OwnedRoom = {
       id: newRoomId(),
       ownerId,
       name,
       runtime: input.runtime,
+      startsAt: new Date(start).toISOString(),
+      endsAt: new Date(start + input.durationMinutes * 60_000).toISOString(),
       createdAt: new Date().toISOString(),
     };
-    await this.repository.save(room);
-    await this.collaboration.create(room.id, STARTER_CODE[room.runtime]);
+    const { id: roomId, runtime, startsAt, endsAt } = room;
+    await this.scheduler.book({ roomId, runtime, startsAt, endsAt });
+    try {
+      await this.repository.save(room);
+      await this.collaboration.create(room.id, STARTER_CODE[room.runtime]);
+    } catch (error) {
+      await this.scheduler.cancel(room.id);
+      throw error;
+    }
     return room;
+  }
+
+  /** Ends a session before its slot does: everyone is disconnected and the slot is freed. */
+  async end(ownerId: string, id: RoomId): Promise<void> {
+    const room = await this.owned(ownerId, id);
+    if (Date.parse(room.endsAt) <= Date.now()) return;
+    await this.repository.save({ ...room, endsAt: new Date().toISOString() });
+    await this.scheduler.cancel(id);
+    await this.clock.end(id);
   }
 
   async delete(ownerId: string, id: RoomId): Promise<void> {
     await this.owned(ownerId, id);
     this.events.publish(id, { type: "room_deleted" });
+    this.clock.forget(id);
     await this.terminals.close(id);
     this.collaboration.destroy(id);
     await this.recordings.deleteRoom(id);
+    await this.scheduler.cancel(id);
     await this.repository.delete(id);
-  }
-
-  /** Switching runtime also switches the room to a machine that has that runtime. */
-  async setRuntime(id: RoomId, runtime: Runtime): Promise<void> {
-    const room = await this.get(id);
-    if (room.runtime === runtime) return;
-    await this.repository.save({ ...room, runtime });
-    this.events.publish(id, { type: "runtime", runtime });
-    await this.terminals.changeRuntime(id, runtime);
   }
 }

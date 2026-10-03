@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Pause, Play } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
-  import { clock } from "$lib/format";
+  import { timecode } from "$lib/format";
 
   /** Play/pause, the time scrubber (with a mark for each run), and playback speed. */
   interface Props {
@@ -25,7 +25,7 @@
     {#if playing}<Pause class="fill-current" />{:else}<Play class="fill-current" />{/if}
   </Button>
   <span class="text-muted-foreground w-24 shrink-0 font-mono text-xs">
-    {clock(time)} / {clock(duration)}
+    {timecode(time)} / {timecode(duration)}
   </span>
 
   <div class="relative flex flex-1 items-center">

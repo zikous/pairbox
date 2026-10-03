@@ -65,19 +65,14 @@ export class TerminalService {
   }
 
   /** Gives the machine back and starts over on a clean one, keeping everyone attached. */
-  async reset(roomId: RoomId, runtime?: Runtime): Promise<void> {
+  async reset(roomId: RoomId): Promise<void> {
     const terminal = this.terminals.get(roomId);
     if (!terminal) return;
     const { attached } = terminal;
     await this.close(roomId);
     this.events.publish(roomId, { type: "output", data: "\x1bc" });
     this.events.publish(roomId, { type: "status", status: { state: "idle" } });
-    this.open(roomId, runtime ?? terminal.runtime).attached = attached;
-  }
-
-  async changeRuntime(roomId: RoomId, runtime: Runtime): Promise<void> {
-    const terminal = this.terminals.get(roomId);
-    if (terminal && terminal.runtime !== runtime) await this.reset(roomId, runtime);
+    this.open(roomId, terminal.runtime).attached = attached;
   }
 
   async close(roomId: RoomId): Promise<void> {

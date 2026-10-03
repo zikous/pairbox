@@ -14,10 +14,12 @@ WORKDIR /app
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/
+COPY packages/service/package.json packages/service/
 COPY packages/worker/package.json packages/worker/
 RUN CI=true pnpm install --frozen-lockfile --filter "@pairbox/worker..."
 
 COPY packages/shared packages/shared
+COPY packages/service packages/service
 COPY packages/worker packages/worker
 WORKDIR /app/packages/worker
 CMD ["node", "--import", "tsx", "src/main.ts"]

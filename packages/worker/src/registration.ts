@@ -1,4 +1,5 @@
-import { INTERNAL_AUTH_HEADER, type RegisterWorker } from "@pairbox/shared";
+import type { RegisterWorker } from "@pairbox/shared";
+import { internalHeaders } from "@pairbox/service";
 
 const HEARTBEAT_MS = 5_000;
 
@@ -13,7 +14,7 @@ export function stayRegistered(options: {
   log: (message: string) => void;
 }): () => void {
   const { poolUrl, internalSecret, worker, log } = options;
-  const headers = { [INTERNAL_AUTH_HEADER]: internalSecret, "content-type": "application/json" };
+  const headers = { ...internalHeaders(internalSecret), "content-type": "application/json" };
   let registered = false;
 
   async function beat() {
@@ -30,7 +31,7 @@ export function stayRegistered(options: {
       }
       const response = await fetch(`${poolUrl}/workers/${worker.id}/heartbeat`, {
         method: "POST",
-        headers: { [INTERNAL_AUTH_HEADER]: internalSecret },
+        headers: internalHeaders(internalSecret),
       });
       if (response.status === 404) registered = false;
     } catch {

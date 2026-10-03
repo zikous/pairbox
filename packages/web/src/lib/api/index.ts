@@ -1,4 +1,4 @@
-import { httpAuth, httpRecordings, httpRooms } from "./http";
+import { httpAuth, httpLobby, httpRecordings, httpRooms } from "./http";
 import { joinRoom } from "./room-session";
 import type { Api } from "./types";
 
@@ -9,6 +9,7 @@ export { HttpError, sessionEnded } from "./http";
 export const api: Api = {
   auth: httpAuth,
   rooms: httpRooms,
+  lobby: httpLobby,
   recordings: httpRecordings,
   join: joinRoom,
 };

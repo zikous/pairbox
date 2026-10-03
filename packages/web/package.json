@@ -37,6 +37,7 @@
     "yjs": "^13.6.33"
   },
   "devDependencies": {
+    "@internationalized/date": "^3.12.4",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@tailwindcss/vite": "^4.3.3",
     "svelte": "^5.57.1",

@@ -1,12 +1,15 @@
 import {
   Listeners,
   type ApiError,
-  type Recording,
+  type Availability,
+  type JoinStatus,
   type RecordingReplay,
   type Room,
+  type RoomSummary,
+  type RoomView,
   type User,
 } from "@pairbox/shared";
-import type { AuthApi, RecordingsApi, RoomsApi } from "./types";
+import type { AuthApi, LobbyApi, RecordingsApi, RoomsApi } from "./types";
 
 export class HttpError extends Error {
   constructor(
@@ -53,13 +56,33 @@ export const httpAuth: AuthApi = {
 };
 
 export const httpRooms: RoomsApi = {
-  list: () => request<Room[]>("GET", "/rooms"),
-  get: (id) => orNull(request<Room>("GET", `/rooms/${id}`)),
+  list: () => request<RoomSummary[]>("GET", "/rooms"),
+  get: (id) => orNull(request<RoomView>("GET", `/rooms/${id}`)),
   create: (input) => request<Room>("POST", "/rooms", input),
   remove: (id) => request<undefined>("DELETE", `/rooms/${id}`),
+  end: (id) => request<undefined>("POST", `/rooms/${id}/end`),
+  availability: (runtime, from, durationMinutes) => {
+    const query = new URLSearchParams({
+      runtime,
+      from: from.toISOString(),
+      durationMinutes: String(durationMinutes),
+    });
+    return request<Availability>("GET", `/rooms/availability?${query}`);
+  },
+};
+
+export const httpLobby: LobbyApi = {
+  ask: async (roomId, participant) =>
+    (await request<{ id: string }>("POST", `/rooms/${roomId}/join-requests`, { participant })).id,
+  status: (roomId, requestId) =>
+    request<JoinStatus>("GET", `/rooms/${roomId}/join-requests/${requestId}`),
+  decide: (roomId, requestId, admit) =>
+    request<undefined>(
+      "POST",
+      `/rooms/${roomId}/join-requests/${requestId}/${admit ? "admit" : "deny"}`,
+    ),
 };
 
 export const httpRecordings: RecordingsApi = {
-  list: (roomId) => request<Recording[]>("GET", `/rooms/${roomId}/recordings`),
-  get: (id) => request<RecordingReplay>("GET", `/recordings/${id}`),
+  get: (roomId) => request<RecordingReplay>("GET", `/rooms/${roomId}/recording`),
 };

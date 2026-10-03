@@ -11,6 +11,7 @@
   "dependencies": {
     "@fastify/swagger": "^9.9.1",
     "@fastify/swagger-ui": "^6.1.1",
+    "@pairbox/service": "workspace:*",
     "@pairbox/shared": "workspace:*",
     "fastify": "^5.12.5",
     "fastify-type-provider-zod": "^7.0.0",

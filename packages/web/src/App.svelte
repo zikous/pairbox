@@ -6,7 +6,6 @@
   import Auth from "./pages/Auth.svelte";
   import Home from "./pages/Home.svelte";
   import NotFound from "./pages/NotFound.svelte";
-  import Recordings from "./pages/Recordings.svelte";
   import Replay from "./pages/Replay.svelte";
   import Room from "./pages/Room.svelte";
 </script>
@@ -19,10 +18,8 @@
     <Home />
   {:else if router.route.name === "sign-in" || router.route.name === "sign-up"}
     <Auth mode={router.route.name} />
-  {:else if router.route.name === "recordings"}
-    {#key router.route.roomId}<Recordings roomId={router.route.roomId} />{/key}
   {:else if router.route.name === "replay"}
-    {#key router.route.id}<Replay id={router.route.id} />{/key}
+    {#key router.route.roomId}<Replay roomId={router.route.roomId} />{/key}
   {:else if router.route.name === "room"}
     {#key router.route.id}<Room id={router.route.id} />{/key}
   {:else}

@@ -18,7 +18,7 @@
   import { Replay } from "$lib/replay.svelte";
 
   /** Plays back a recorded session: the code, cursors and terminal, as they were. */
-  let { id }: { id: string } = $props();
+  let { roomId }: { roomId: string } = $props();
 
   let replay = $state.raw<Replay>();
   let recording = $state<Recording>();
@@ -30,16 +30,17 @@
 
   void (async () => {
     try {
-      const data = await api.recordings.get(id);
-      const room = await api.rooms.get(data.recording.roomId);
+      const [data, room] = await Promise.all([api.recordings.get(roomId), api.rooms.get(roomId)]);
       recording = data.recording;
       roomName = room?.name ?? "";
       replay = new Replay(data, room?.runtime ?? "python");
     } catch (failure) {
       error =
         failure instanceof HttpError && failure.status === 403
-          ? "Only the room's owner can replay its sessions."
-          : errorMessage(failure);
+          ? "Only the session's owner can replay it."
+          : failure instanceof HttpError && failure.status === 404
+            ? "This session wasn't recorded: nobody opened it."
+            : errorMessage(failure);
     }
   })();
 
@@ -81,9 +82,8 @@
       <span class="text-muted-foreground hidden text-xs md:inline">
         Replay · {dateTime(recording.startedAt)}
       </span>
-      <Button href="/r/{recording.roomId}/recordings" variant="ghost" size="sm" class="ml-auto">
-        <ArrowLeft /> All sessions
-      </Button>
+      <Button href="/" variant="ghost" size="sm" class="ml-auto"><ArrowLeft /> Your sessions</Button
+      >
     </header>
 
     <main class="grid min-h-0 flex-1 grid-cols-[16rem_3fr_2fr] max-md:grid-cols-1">

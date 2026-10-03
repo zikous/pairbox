@@ -31,3 +31,11 @@ export class NotRoomOwnerError extends Error {
     super("Only the room's owner can do this");
   }
 }
+
+export class SlotTakenError extends Error {
+  constructor() {
+    super("No sandbox is free for that whole slot. Pick another time.");
+  }
+}
+
+export class SessionNotOpenError extends Error {}

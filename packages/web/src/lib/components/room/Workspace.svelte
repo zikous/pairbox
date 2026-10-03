@@ -7,9 +7,8 @@
   import { toast } from "svelte-sonner";
   import {
     RUNTIMES,
-    isRuntime,
-    type Runtime,
-    type Room,
+    type JoinRequest,
+    type RoomView,
     type RunStatus,
     type SandboxState,
   } from "@pairbox/shared";
@@ -19,12 +18,13 @@
   import CopyButton from "$lib/components/shared/CopyButton.svelte";
   import { Button, buttonVariants } from "$lib/components/ui/button";
   import * as Resizable from "$lib/components/ui/resizable";
-  import * as Select from "$lib/components/ui/select";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import { modKey } from "$lib/platform";
   import { prefs } from "$lib/prefs.svelte";
-  import { roomUrl, router } from "$lib/router.svelte";
+  import { roomUrl } from "$lib/router.svelte";
   import Editor from "./Editor.svelte";
+  import EndSessionButton from "./EndSessionButton.svelte";
+  import JoinRequests from "./JoinRequests.svelte";
   import PaneDivider from "./PaneDivider.svelte";
   import PaneHeader from "./PaneHeader.svelte";
   import Participants, { type Person } from "./Participants.svelte";
@@ -33,11 +33,13 @@
   import SandboxOverlay from "./SandboxOverlay.svelte";
   import StatusBar from "./StatusBar.svelte";
   import Terminal from "./Terminal.svelte";
+  import TimeLeft from "./TimeLeft.svelte";
 
   /** The live room: editor and terminal side by side, inside the room frame. */
-  let { room, session }: { room: Room; session: RoomSession } = $props();
+  let { room, session }: { room: RoomView; session: RoomSession } = $props();
+  const runtime = $derived(room.runtime);
 
-  let runtime = $state<Runtime>("python");
+  let requests = $state<JoinRequest[]>([]);
   let status = $state<RunStatus>({ state: "idle" });
   let sandbox = $state<SandboxState>({ state: "starting" });
   let people = $state<Person[]>([]);
@@ -65,15 +67,16 @@
     session.awareness.on("change", refreshPeople);
     refreshPeople();
 
-    runtime = session.runtime();
     const unsubscribe = [
-      session.onRuntime((next) => (runtime = next)),
+      session.onJoinRequests((next) => {
+        const known = new Set(requests.map((r) => r.id));
+        for (const request of next) {
+          if (!known.has(request.id)) toast(`${request.participant.name} wants to join`);
+        }
+        requests = next;
+      }),
       session.terminal.onStatus((next) => (status = next)),
       session.terminal.onSandbox((next) => (sandbox = next)),
-      session.onDeleted(() => {
-        toast.error("The owner deleted this room");
-        router.navigate("/");
-      }),
     ];
 
     return () => {
@@ -112,10 +115,6 @@
       toggleTerminal();
     }
   }
-
-  function changeRuntime(value: string) {
-    if (isRuntime(value)) session.setRuntime(value);
-  }
 </script>
 
 <svelte:head><title>{room.name} · pairbox</title></svelte:head>
@@ -123,6 +122,11 @@
 
 <RoomFrame {room}>
   {#snippet actions()}
+    <TimeLeft endsAt={room.endsAt} />
+    {#if room.owner}
+      <JoinRequests roomId={room.id} {requests} />
+      <EndSessionButton roomId={room.id} />
+    {/if}
     <Tooltip.Root>
       <Tooltip.Trigger
         class="text-destructive flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium"
@@ -152,20 +156,8 @@
           <RuntimeDot {runtime} />{RUNTIMES[runtime].file}
         {/snippet}
         {#snippet actions()}
-          <Select.Root type="single" value={runtime} onValueChange={changeRuntime}>
-            <Select.Trigger
-              size="sm"
-              class="h-7 border-0 bg-transparent font-mono text-xs shadow-none dark:bg-transparent"
-              aria-label="Language"
-            >
-              {RUNTIMES[runtime].label}
-            </Select.Trigger>
-            <Select.Content align="end">
-              {#each Object.entries(RUNTIMES) as [id, { label }] (id)}
-                <Select.Item value={id} {label} />
-              {/each}
-            </Select.Content>
-          </Select.Root>
+          <span class="text-muted-foreground px-2 font-mono text-xs">{RUNTIMES[runtime].label}</span
+          >
         {/snippet}
       </PaneHeader>
       <div class="min-h-0 flex-1">

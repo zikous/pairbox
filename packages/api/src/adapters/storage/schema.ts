@@ -6,6 +6,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import type { Participant } from "@pairbox/shared";
@@ -43,6 +44,9 @@ export const rooms = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     name: text().notNull(),
     runtime: text().notNull(),
+    /** The booked slot. Guests can only be in the room during it. */
+    startsAt: timestamp({ withTimezone: true }).notNull(),
+    endsAt: timestamp({ withTimezone: true }).notNull(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index().on(table.ownerId)],
@@ -66,7 +70,7 @@ export const templates = pgTable("templates", {
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 });
 
-/** Recorded sessions. The events themselves live in object storage, in `chunkCount` chunks. */
+/** One recording per room. The events themselves live in object storage, in `chunkCount` chunks. */
 export const recordings = pgTable(
   "recordings",
   {
@@ -79,5 +83,5 @@ export const recordings = pgTable(
     participants: jsonb().$type<Participant[]>().notNull().default([]),
     chunkCount: integer().notNull().default(0),
   },
-  (table) => [index().on(table.roomId)],
+  (table) => [uniqueIndex().on(table.roomId)],
 );

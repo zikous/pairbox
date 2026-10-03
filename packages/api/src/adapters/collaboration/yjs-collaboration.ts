@@ -4,7 +4,12 @@ import * as syncProtocol from "y-protocols/sync";
 import * as decoding from "lib0/decoding";
 import * as encoding from "lib0/encoding";
 import type { WebSocket } from "ws";
-import { CLOSE_ROOM_NOT_FOUND, type Participant, type RoomId } from "@pairbox/shared";
+import {
+  CLOSE_ROOM_NOT_FOUND,
+  CLOSE_SESSION_ENDED,
+  type Participant,
+  type RoomId,
+} from "@pairbox/shared";
 import type {
   Collaboration,
   CollaborationObserver,
@@ -45,15 +50,23 @@ export class YjsCollaboration implements Collaboration {
     return this.docs.get(roomId)?.doc.getText("code").toString() ?? "";
   }
 
+  async end(roomId: RoomId): Promise<void> {
+    const shared = this.docs.get(roomId);
+    if (!shared) return;
+    this.docs.delete(roomId);
+    await shared.close(CLOSE_SESSION_ENDED, "Session ended");
+  }
+
   destroy(roomId: RoomId): void {
     this.docs.get(roomId)?.destroy();
     this.docs.delete(roomId);
   }
 
-  /** Returns false when the room has no saved document. */
-  async connect(roomId: RoomId, socket: WebSocket): Promise<boolean> {
-    // The client starts syncing as soon as it connects: keep its messages until we're ready.
-    const early: Buffer[] = [];
+  /**
+   * Returns false when the room has no saved document. `early` holds messages the client sent
+   * before this was called (it starts syncing as soon as it connects).
+   */
+  async connect(roomId: RoomId, socket: WebSocket, early: Buffer[] = []): Promise<boolean> {
     const hold = (data: Buffer) => early.push(data);
     socket.on("message", hold);
 
@@ -176,10 +189,16 @@ class SharedDoc {
     for (const data of early) this.receive(socket, new Uint8Array(data));
   }
 
-  destroy(): void {
+  /** Saves the document, then disconnects everyone and frees it. */
+  async close(code: number, reason: string): Promise<void> {
+    await this.save();
+    this.destroy(code, reason);
+  }
+
+  destroy(code = CLOSE_ROOM_NOT_FOUND, reason = "Room deleted"): void {
     clearTimeout(this.saveTimer);
     clearTimeout(this.unloadTimer);
-    for (const socket of this.sockets.keys()) socket.close(CLOSE_ROOM_NOT_FOUND, "Room deleted");
+    for (const socket of this.sockets.keys()) socket.close(code, reason);
     this.awareness.destroy();
     this.doc.destroy();
   }

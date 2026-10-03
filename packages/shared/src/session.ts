@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ParticipantSchema } from "./participant";
-import { RuntimeSchema, type Runtime } from "./runtime";
+import type { JoinRequest } from "./lobby";
 import type { RunStatus } from "./run";
 
 /** Messages the browser sends on `/ws/rooms/:id/session`. */
@@ -16,7 +16,6 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("run") }),
   z.object({ type: z.literal("stop") }),
   z.object({ type: z.literal("reset") }),
-  z.object({ type: z.literal("set_runtime"), runtime: RuntimeSchema }),
 ]);
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 
@@ -32,8 +31,12 @@ export type ServerMessage =
   | { type: "output"; data: string }
   | { type: "status"; status: RunStatus }
   | { type: "sandbox"; sandbox: SandboxState }
-  | { type: "runtime"; runtime: Runtime }
+  /** Only sent to the room's owner: who is waiting to be let in. */
+  | { type: "join_requests"; requests: JoinRequest[] }
+  | { type: "session_ended" }
   | { type: "room_deleted" };
 
-/** WebSocket close code for a room that doesn't exist. Clients must not reconnect. */
+/** WebSocket close codes. Clients must not reconnect after any of these. */
 export const CLOSE_ROOM_NOT_FOUND = 4404;
+export const CLOSE_NOT_ADMITTED = 4403;
+export const CLOSE_SESSION_ENDED = 4410;
