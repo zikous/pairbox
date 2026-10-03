@@ -5,6 +5,7 @@ import { spawn, type IPty } from "node-pty";
 import type { WebSocket } from "ws";
 import {
   RUNTIMES,
+  parseJson,
   WorkerCommandSchema,
   type Runtime,
   type RunStatus,
@@ -41,9 +42,14 @@ export function sandboxUser(name: string): SandboxUser {
  */
 export function openTerminal(
   socket: WebSocket,
-  options: { runtime: Runtime; workspace: string; user: SandboxUser },
+  options: {
+    runtime: Runtime;
+    workspace: string;
+    user: SandboxUser;
+    log: (error: unknown) => void;
+  },
 ) {
-  const { runtime, workspace, user } = options;
+  const { runtime, workspace, user, log } = options;
   const { file, command } = RUNTIMES[runtime];
   const send = (event: WorkerEvent) => socket.send(JSON.stringify(event));
 
@@ -119,8 +125,9 @@ export function openTerminal(
   }
 
   socket.on("message", (raw: Buffer) => {
-    const parsed = WorkerCommandSchema.safeParse(JSON.parse(raw.toString()));
-    if (parsed.success) void handle(parsed.data);
+    const parsed = WorkerCommandSchema.safeParse(parseJson(raw.toString()));
+    // A failed command (say, a full disk) shouldn't take the whole worker down.
+    if (parsed.success) handle(parsed.data).catch((error: unknown) => log(error));
   });
   socket.on("close", () => shell.kill("SIGKILL"));
 }

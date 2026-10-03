@@ -1,45 +1,42 @@
-import { existsSync } from "node:fs";
 import { hostname, networkInterfaces } from "node:os";
-import { fileURLToPath } from "node:url";
-import { isRuntime, type Runtime } from "@pairbox/shared";
-
-// Settings live in .env at the repo root (see .env.example). Real environment variables win.
-const envFile = fileURLToPath(new URL("../../../.env", import.meta.url));
-if (existsSync(envFile)) process.loadEnvFile(envFile);
-
-function required(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} is not set. Copy .env.example to .env at the repo root.`);
-  return value;
-}
-
-function runtime(): Runtime {
-  const value = required("WORKER_RUNTIME");
-  if (!isRuntime(value)) throw new Error(`WORKER_RUNTIME "${value}" is not a known runtime`);
-  return value;
-}
+import { z } from "zod";
+import { readEnv, RuntimeSchema } from "@pairbox/shared";
 
 /** The address other services use to reach this worker: its first network IPv4. */
 function ownAddress(): string {
-  const ip = Object.values(networkInterfaces())
+  const net = Object.values(networkInterfaces())
     .flat()
-    .find((net) => net?.family === "IPv4" && !net.internal)?.address;
-  return ip ?? "127.0.0.1";
+    .find((n) => n?.family === "IPv4" && !n.internal);
+  return net?.address ?? "127.0.0.1";
 }
 
-const port = Number(required("WORKER_PORT"));
-
-export const config = {
-  id: process.env["WORKER_ID"] ?? hostname(),
-  url: process.env["WORKER_URL"] ?? `http://${ownAddress()}:${port}`,
-  host: "0.0.0.0",
-  port,
-  runtime: runtime(),
-  poolUrl: required("POOL_URL"),
-  internalSecret: required("INTERNAL_SECRET"),
-  /** The unprivileged user room code runs as, and the folders it may write to. */
-  sandboxUser: process.env["SANDBOX_USER"] ?? "sandbox",
-  workspace: process.env["WORKSPACE_DIR"] ?? "/workspace",
-  writableDirs: (process.env["SANDBOX_DIRS"] ?? "/workspace,/home/sandbox,/tmp").split(","),
-  production: process.env["NODE_ENV"] === "production",
-};
+export const config = readEnv(
+  z
+    .object({
+      WORKER_PORT: z.coerce.number().int(),
+      WORKER_RUNTIME: RuntimeSchema,
+      WORKER_ID: z.string().default(hostname()),
+      WORKER_URL: z.url().optional(),
+      POOL_URL: z.url(),
+      INTERNAL_SECRET: z.string(),
+      /** The unprivileged user room code runs as, and the folders it may write to. */
+      SANDBOX_USER: z.string().default("sandbox"),
+      WORKSPACE_DIR: z.string().default("/workspace"),
+      SANDBOX_DIRS: z.string().default("/workspace,/home/sandbox,/tmp"),
+      NODE_ENV: z.string().optional(),
+    })
+    .transform((env) => ({
+      id: env.WORKER_ID,
+      url: env.WORKER_URL ?? `http://${ownAddress()}:${env.WORKER_PORT}`,
+      host: "0.0.0.0",
+      port: env.WORKER_PORT,
+      runtime: env.WORKER_RUNTIME,
+      poolUrl: env.POOL_URL,
+      internalSecret: env.INTERNAL_SECRET,
+      sandboxUser: env.SANDBOX_USER,
+      workspace: env.WORKSPACE_DIR,
+      writableDirs: env.SANDBOX_DIRS.split(","),
+      logger: env.NODE_ENV === "production" ? true : { transport: { target: "pino-pretty" } },
+    })),
+  process.env,
+);

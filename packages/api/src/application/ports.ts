@@ -1,12 +1,36 @@
-import type { Runtime, Room, RoomId, RunStatus } from "@pairbox/shared";
+import type { Room, RoomId, RunStatus, Runtime, User } from "@pairbox/shared";
 
 /** What the application needs from the outside world. Adapters implement these. */
 
+/** A room together with the user who created it. */
+export interface OwnedRoom extends Room {
+  ownerId: string;
+}
+
 export interface RoomRepository {
-  list(): Promise<Room[]>;
-  get(id: RoomId): Promise<Room | undefined>;
-  save(room: Room): Promise<void>;
+  listByOwner(ownerId: string): Promise<OwnedRoom[]>;
+  get(id: RoomId): Promise<OwnedRoom | undefined>;
+  save(room: OwnedRoom): Promise<void>;
   delete(id: RoomId): Promise<void>;
+}
+
+export interface UserRepository {
+  /** Returns undefined when the email is already taken. */
+  create(email: string, passwordHash: string): Promise<User | undefined>;
+  findByEmail(email: string): Promise<(User & { passwordHash: string }) | undefined>;
+}
+
+/** Sessions are stored by a hash of their token, never by the token itself. */
+export interface SessionRepository {
+  create(session: { tokenHash: string; userId: string; expiresAt: Date }): Promise<void>;
+  /** The session's user, if the session exists and hasn't expired. */
+  findUser(tokenHash: string): Promise<User | undefined>;
+  delete(tokenHash: string): Promise<void>;
+}
+
+export interface PasswordHasher {
+  hash(password: string): Promise<string>;
+  verify(password: string, hash: string): Promise<boolean>;
 }
 
 /** Each room's document, stored as its CRDT state. */

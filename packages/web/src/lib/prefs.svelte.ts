@@ -15,7 +15,6 @@ interface Prefs {
   name: string;
   color: string;
   keymap: Keymap;
-  hostSecret: string;
 }
 
 const KEY = "pairbox.prefs";
@@ -25,7 +24,6 @@ function initial(): Prefs {
     name: "",
     color: PARTICIPANT_COLORS[Math.floor(Math.random() * PARTICIPANT_COLORS.length)] ?? "#0090ff",
     keymap: "default",
-    hostSecret: "",
   };
   try {
     return {

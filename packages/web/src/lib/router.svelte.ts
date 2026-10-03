@@ -1,9 +1,16 @@
 import type { ShareInfo } from "@pairbox/shared";
 
-export type Route = { name: "home" } | { name: "room"; id: string } | { name: "not-found" };
+export type Route =
+  | { name: "home" }
+  | { name: "sign-in" }
+  | { name: "sign-up" }
+  | { name: "room"; id: string }
+  | { name: "not-found" };
 
 function parse(pathname: string): Route {
   if (pathname === "/") return { name: "home" };
+  if (pathname === "/signin") return { name: "sign-in" };
+  if (pathname === "/signup") return { name: "sign-up" };
   const room = /^\/r\/([a-z0-9]+)\/?$/.exec(pathname);
   return room?.[1] ? { name: "room", id: room[1] } : { name: "not-found" };
 }

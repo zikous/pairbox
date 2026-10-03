@@ -1,13 +1,14 @@
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
-import type {
-  ClientMessage,
-  ServerMessage,
-  Runtime,
-  Participant,
-  Room,
-  RunStatus,
-  SandboxState,
+import {
+  Listeners,
+  type ClientMessage,
+  type Participant,
+  type Room,
+  type RunStatus,
+  type Runtime,
+  type SandboxState,
+  type ServerMessage,
 } from "@pairbox/shared";
 import type { RoomSession, TerminalSession } from "./types";
 
@@ -36,24 +37,19 @@ export async function joinRoom(room: Room, me: Participant): Promise<RoomSession
   };
 
   let runtime = room.runtime;
-  const runtimeListeners = new Set<(runtime: Runtime) => void>();
-  const deletedListeners = new Set<() => void>();
-  const terminal = createTerminal(send);
+  const runtimeChanged = new Listeners<Runtime>();
+  const deleted = new Listeners();
+  const terminal = new RoomTerminal(send);
 
   socket.addEventListener("message", (event: MessageEvent<string>) => {
     const message = JSON.parse(event.data) as ServerMessage;
-    switch (message.type) {
-      case "output":
-        return terminal.receiveOutput(message.data);
-      case "status":
-        return terminal.receiveStatus(message.status);
-      case "sandbox":
-        return terminal.receiveSandbox(message.sandbox);
-      case "runtime":
-        runtime = message.runtime;
-        return runtimeListeners.forEach((listener) => listener(runtime));
-      case "room_deleted":
-        return deletedListeners.forEach((listener) => listener());
+    if (message.type === "runtime") {
+      runtime = message.runtime;
+      runtimeChanged.emit(runtime);
+    } else if (message.type === "room_deleted") {
+      deleted.emit();
+    } else {
+      terminal.receive(message);
     }
   });
 
@@ -75,69 +71,62 @@ export async function joinRoom(room: Room, me: Participant): Promise<RoomSession
     awareness: provider.awareness,
     terminal,
     runtime: () => runtime,
-    onRuntime(listener) {
-      runtimeListeners.add(listener);
-      return () => runtimeListeners.delete(listener);
-    },
+    onRuntime: (listener) => runtimeChanged.add(listener),
     setRuntime: (next) => send({ type: "set_runtime", runtime: next }),
-    onDeleted(listener) {
-      deletedListeners.add(listener);
-      return () => deletedListeners.delete(listener);
-    },
+    onDeleted: (listener) => deleted.add(listener),
     leave,
   };
 }
 
-/** Keeps recent output so a terminal view that subscribes late still sees it. */
-function createTerminal(send: (message: ClientMessage) => void) {
-  const outputListeners = new Set<(data: string) => void>();
-  const statusListeners = new Set<(status: RunStatus) => void>();
-  let scrollback = "";
-  let status: RunStatus = { state: "idle" };
-  let sandbox: SandboxState = { state: "starting" };
-  const sandboxListeners = new Set<(sandbox: SandboxState) => void>();
+/**
+ * The room's terminal as seen from this browser. Keeps the latest output and states, so a view
+ * that subscribes late still sees them.
+ */
+class RoomTerminal implements TerminalSession {
+  private scrollback = "";
+  private status: RunStatus = { state: "idle" };
+  private sandbox: SandboxState = { state: "starting" };
+  private readonly output = new Listeners<string>();
+  private readonly statusChanged = new Listeners<RunStatus>();
+  private readonly sandboxChanged = new Listeners<SandboxState>();
 
-  const terminal: TerminalSession & {
-    receiveOutput(data: string): void;
-    receiveStatus(status: RunStatus): void;
-    receiveSandbox(sandbox: SandboxState): void;
-  } = {
-    onOutput(listener) {
-      if (scrollback) listener(scrollback);
-      outputListeners.add(listener);
-      return () => outputListeners.delete(listener);
-    },
-    onStatus(listener) {
-      listener(status);
-      statusListeners.add(listener);
-      return () => statusListeners.delete(listener);
-    },
-    input: (data) => send({ type: "input", data }),
-    run: () => send({ type: "run" }),
-    stop: () => send({ type: "stop" }),
-    reset: () => send({ type: "reset" }),
-    resize: (cols, rows) => send({ type: "resize", cols, rows }),
-    onSandbox(listener) {
-      listener(sandbox);
-      sandboxListeners.add(listener);
-      return () => sandboxListeners.delete(listener);
-    },
+  constructor(private readonly send: (message: ClientMessage) => void) {}
 
-    receiveOutput(data) {
+  onOutput(listener: (data: string) => void) {
+    if (this.scrollback) listener(this.scrollback);
+    return this.output.add(listener);
+  }
+  onStatus(listener: (status: RunStatus) => void) {
+    listener(this.status);
+    return this.statusChanged.add(listener);
+  }
+  onSandbox(listener: (sandbox: SandboxState) => void) {
+    listener(this.sandbox);
+    return this.sandboxChanged.add(listener);
+  }
+
+  input = (data: string) => this.send({ type: "input", data });
+  resize = (cols: number, rows: number) => this.send({ type: "resize", cols, rows });
+  run = () => this.send({ type: "run" });
+  stop = () => this.send({ type: "stop" });
+  reset = () => this.send({ type: "reset" });
+
+  receive(message: Extract<ServerMessage, { type: "output" | "status" | "sandbox" }>) {
+    if (message.type === "output") {
       // "\x1bc" resets the terminal, so older output no longer matters.
-      scrollback = data.includes("\x1bc") ? data : (scrollback + data).slice(-SCROLLBACK_MAX);
-      outputListeners.forEach((listener) => listener(data));
-    },
-    receiveSandbox(next) {
-      sandbox = next;
-      sandboxListeners.forEach((listener) => listener(next));
-    },
-    receiveStatus(next) {
-      status = next;
-      statusListeners.forEach((listener) => listener(next));
-    },
-  };
-  return terminal;
+      const { data } = message;
+      this.scrollback = data.includes("\x1bc")
+        ? data
+        : (this.scrollback + data).slice(-SCROLLBACK_MAX);
+      this.output.emit(data);
+    } else if (message.type === "status") {
+      this.status = message.status;
+      this.statusChanged.emit(message.status);
+    } else {
+      this.sandbox = message.sandbox;
+      this.sandboxChanged.emit(message.sandbox);
+    }
+  }
 }
 
 function synced(provider: WebsocketProvider): Promise<void> {
@@ -151,7 +140,7 @@ function synced(provider: WebsocketProvider): Promise<void> {
 function opened(socket: WebSocket): Promise<void> {
   return new Promise((resolve, reject) => {
     socket.addEventListener("open", () => resolve(), { once: true });
-    socket.addEventListener("close", (event) => reject(new Error(event.reason || "Disconnected")), {
+    socket.addEventListener("close", (e) => reject(new Error(e.reason || "Disconnected")), {
       once: true,
     });
   });

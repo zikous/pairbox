@@ -11,12 +11,13 @@ It is built from a few small services. They only talk to each other over HTTP an
 - Real-time collaborative editing, with nothing for guests to install.
 - An editor in the browser good enough that nobody misses their IDE.
 - A shared, interactive terminal for each room, on a real shell, that everyone can see and type into.
+- Accounts with email and password. Signed-in users create and manage their own rooms; guests join by link without an account.
 - Self-hosting with one command (`docker compose up`).
 - Adding workers, on the same machine or others, when more rooms need to run at once.
 
 **Out of scope for now**
 
-- Accounts and multi-tenancy. A single host secret is enough for a self-hosted tool. Running pairbox as a public service would add these later, on top of the same architecture.
+- Teams, roles and billing. Each account owns its rooms; sharing ownership can come later.
 - Multi-file projects. One file per room keeps the document model simple. Workers already use a workspace folder, so projects can come later.
 - Desktop editor plugins. All effort goes into the browser editor.
 - Reconnect handling. It can be added once the core works.
@@ -54,10 +55,11 @@ Browsers only reach `web`. Workers are on a private network: the api and the poo
 
 | Concept | Meaning | Rules |
 |---|---|---|
-| **Room** | A shared workspace reached by a link | Has one workspace, one language and one terminal. Exists until the host deletes it. |
-| **Participant** | Someone connected to a room | Anonymous, identified by a display name. Everyone has the same permissions. |
+| **User** | Someone with an account | Signs in with email and password. Owns the rooms they create. |
+| **Room** | A shared workspace reached by a link | Has one owner, one workspace, one runtime and one terminal. Exists until its owner deletes it. |
+| **Participant** | Someone connected to a room | Needs no account; identified by a display name. Everyone in a room has the same permissions. |
 | **Workspace** | The code being edited (one file for now) | Concurrent edits always merge, with no locking. Saved to the database. |
-| **Template** | A saved starting point for new rooms | A language plus starting code. Created by the host. |
+| **Template** | A saved starting point for new rooms | A runtime plus starting code. |
 | **Worker** | An isolated machine that runs one room at a time | Free, reserved by exactly one room, or being cleaned. Nothing from one room is visible to the next. |
 | **Terminal** | The shell on the room's worker | Shared by all participants. Opened when a room becomes active, closed when it goes idle or is reset. |
 | **Run** | One execution of the workspace in the terminal | One at a time per room. Uses a copy of the code taken when Run is clicked. |
@@ -76,17 +78,17 @@ stateDiagram-v2
     reserved --> gone: stops answering
 ```
 
-- **Registration.** A worker announces itself to the pool when it starts (its address and the languages its image supports) and then sends heartbeats. Missing heartbeats mark it gone. The pool needs no list of workers and no database: its state can always be rebuilt from the workers.
-- **Reservation.** When a room becomes active, the api asks the pool for a free worker that supports the room's language. If none is free, the room says that no sandbox is available.
+- **Registration.** A worker announces itself to the pool when it starts (its address and the runtime its image provides) and then sends heartbeats. Missing heartbeats mark it gone. The pool needs no list of workers and no database: its state can always be rebuilt from the workers.
+- **Reservation.** When a room becomes active, the api asks the pool for a free worker with the room's runtime. If none is free, the room waits in line and everyone in it sees their place; the terminal attaches as soon as a worker frees up. Editing works the whole time.
 - **Release and cleaning.** When everyone has left a room for a while, or someone presses Reset, the api releases the worker. The pool has it cleaned: every process of the previous room is killed and its workspace and home folder are wiped. Then it is free again.
-- **Images.** A worker image is a base system, language runtimes (Python and Node.js first) and the worker agent. Adding a language means building an image; no code changes.
+- **Images.** A worker image is a base system, one runtime (Python or Node.js for TypeScript) and the worker agent. Adding a runtime means building an image; no code changes.
 
 ## Communication
 
 | Channel | Between | Carries |
 |---|---|---|
 | **Collaboration** (WebSocket) | browser and api | Edits, cursors and presence, merged by a CRDT |
-| **Session** (WebSocket) | browser and api | Terminal input and output, run, stop, reset, language changes |
+| **Session** (WebSocket) | browser and api | Terminal input and output, run, stop, reset, runtime changes |
 | **Pool** (HTTP) | api and pool | Reserve and release workers |
 | **Registration** (HTTP) | worker and pool | Register, heartbeat, clean |
 | **Terminal** (WebSocket) | api and worker | Write files, shell input and output, resize, run, stop |
@@ -151,16 +153,19 @@ In development the worker is a container with these limits. In production it can
 
 | Table | Holds |
 |---|---|
-| **rooms** | id, name, language, creation time |
+| **users** | id, email, password hash |
+| **sessions** | a hash of the session token, its user, its expiry |
+| **rooms** | id, owner, name, runtime, creation time |
 | **workspaces** | the room's document (its CRDT state) and when it was last saved |
-| **templates** | id, name, language, starting code |
+| **templates** | id, name, runtime, starting code |
 
 Only active rooms are held in memory. Workspaces are saved shortly after each change and when a room goes idle, and loaded when someone opens the room. Worker state is never saved.
 
 ## Security
 
-- **Creating and deleting rooms and templates** requires the host secret.
-- **Joining** requires only the link, so room ids must be hard to guess.
+- **Accounts.** Passwords are hashed with scrypt and a random salt; the plain password is never stored. Signing up and signing in are rate-limited.
+- **Sessions.** Signing in sets a random token in an HttpOnly cookie, valid for 30 days. The database only keeps a hash of the token, so a leaked database can't be used to sign in.
+- **Rooms.** Listing, creating and deleting rooms requires signing in; only a room's owner can delete it. Joining requires only the link, so room ids must be hard to guess.
 - **Nothing has access to the container runtime.** Isolation comes from the worker boundary, not from a service controlling Docker. On a real deployment, use VMs (or a user-space kernel) for workers.
 - **Services trust each other** through a shared internal secret and a private network. Only `web` is exposed.
 
@@ -209,7 +214,7 @@ These are suggestions. Each one sits behind an adapter.
 ## Milestones
 
 1. **Shared editor.** Two browsers edit the same document. *Done.*
-2. **Usable rooms.** Language picker, presence, Stop, Reset, host secret, invite links. *Done, with a simulated terminal.*
+2. **Usable rooms.** Runtime picker, presence, Stop, Reset, invite links. *Done.*
 3. **Workers.** The worker agent with a real shell, its image (Python and Node.js), and the pool service. Replaces the simulated terminal.
 4. **One command.** Docker Compose for web, api, pool, workers and the database.
 5. **Persistent.** Rooms, workspaces and templates in Postgres.

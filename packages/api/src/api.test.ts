@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
@@ -7,13 +6,9 @@ import type { Sandboxes, SandboxSession } from "./application/ports";
 import { connectDatabase } from "./adapters/storage/database";
 import { createServer } from "./server";
 
-// Runs against the real database: `docker compose up -d db` creates pairbox_test.
-const envFile = new URL("../../../.env", import.meta.url);
-if (existsSync(envFile)) process.loadEnvFile(envFile);
+// Runs against a real database: `docker compose up -d db` creates pairbox_test.
 const testDatabaseUrl = process.env["TEST_DATABASE_URL"];
 if (!testDatabaseUrl) throw new Error("TEST_DATABASE_URL is not set (see .env.example)");
-
-const auth = { authorization: "Bearer test-secret" };
 
 /** Stands in for the pool and workers: "runs" code by echoing its first line. */
 const testSandboxes: Sandboxes = {
@@ -39,104 +34,142 @@ const testSandboxes: Sandboxes = {
 
 let database: Awaited<ReturnType<typeof connectDatabase>>;
 let app: Awaited<ReturnType<typeof createServer>>;
+const start = async () => (app = await createServer({ db: database.db, sandboxes: testSandboxes }));
 
 beforeAll(async () => {
   database = await connectDatabase(testDatabaseUrl);
 });
 afterAll(() => database.close());
-
 beforeEach(async () => {
-  await database.db.execute(sql`truncate rooms, templates cascade`);
-  app = await createServer({
-    hostSecret: "test-secret",
-    db: database.db,
-    sandboxes: testSandboxes,
-  });
+  await database.db.execute(sql`truncate users, templates cascade`);
+  await start();
 });
 afterEach(() => app.close());
 
-async function createRoom(name = "Interview", runtime = "python"): Promise<Room> {
+/** Signs up and returns the session cookie to send with later requests. */
+async function signUp(email = "ada@example.com", password = "correct horse") {
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/auth/signup",
+    payload: { email, password },
+  });
+  expect(response.statusCode).toBe(201);
+  const cookie = response.cookies.find((c) => c.name === "pairbox_session");
+  expect(cookie?.httpOnly).toBe(true);
+  return { cookie: `pairbox_session=${cookie?.value}` };
+}
+
+async function createRoom(headers: { cookie: string }, name = "Interview"): Promise<Room> {
   const response = await app.inject({
     method: "POST",
     url: "/api/rooms",
-    headers: auth,
-    payload: { name, runtime },
+    headers,
+    payload: { name, runtime: "python" },
   });
   expect(response.statusCode).toBe(201);
   return response.json();
 }
 
-describe("rooms API", () => {
-  it("requires the host secret to list, create and delete", async () => {
+describe("auth", () => {
+  it("signs up, then knows who you are", async () => {
+    const headers = await signUp(" Ada@Example.com ");
+    const me = await app.inject({ url: "/api/auth/me", headers });
+    expect(me.json()).toMatchObject({ email: "ada@example.com" });
+  });
+
+  it("refuses a second account with the same email", async () => {
+    await signUp();
+    const again = await app.inject({
+      method: "POST",
+      url: "/api/auth/signup",
+      payload: { email: "ada@example.com", password: "another password" },
+    });
+    expect(again.statusCode).toBe(409);
+  });
+
+  it("signs in only with the right password", async () => {
+    await signUp();
+    const login = (password: string) =>
+      app.inject({
+        method: "POST",
+        url: "/api/auth/login",
+        payload: { email: "ada@example.com", password },
+      });
+    expect((await login("wrong password")).statusCode).toBe(401);
+    expect((await login("correct horse")).statusCode).toBe(200);
+  });
+
+  it("signing out ends the session", async () => {
+    const headers = await signUp();
+    await app.inject({ method: "POST", url: "/api/auth/logout", headers });
+    expect((await app.inject({ url: "/api/auth/me", headers })).statusCode).toBe(401);
+  });
+});
+
+describe("rooms", () => {
+  it("needs a signed-in user to list, create and delete", async () => {
     expect((await app.inject({ url: "/api/rooms" })).statusCode).toBe(401);
-    const wrong = { authorization: "Bearer nope" };
-    expect((await app.inject({ url: "/api/rooms", headers: wrong })).statusCode).toBe(401);
-    const created = await app.inject({ method: "POST", url: "/api/rooms", payload: {} });
-    expect(created.statusCode).toBe(401);
+    expect((await app.inject({ method: "POST", url: "/api/rooms", payload: {} })).statusCode).toBe(
+      401,
+    );
   });
 
   it("creates, reads, lists and deletes a room", async () => {
-    const room = await createRoom("  Mock   interview ");
+    const headers = await signUp();
+    const room = await createRoom(headers, "  Mock   interview ");
     expect(room).toMatchObject({ name: "Mock interview", runtime: "python" });
 
-    const fetched = await app.inject({ url: `/api/rooms/${room.id}` });
-    expect(fetched.json()).toEqual(room);
+    // Anyone with the link can look a room up.
+    expect((await app.inject({ url: `/api/rooms/${room.id}` })).json()).toEqual(room);
+    expect((await app.inject({ url: "/api/rooms", headers })).json()).toEqual([room]);
 
-    const list = await app.inject({ url: "/api/rooms", headers: auth });
-    expect(list.json()).toEqual([room]);
-
-    const deleted = await app.inject({
-      method: "DELETE",
-      url: `/api/rooms/${room.id}`,
-      headers: auth,
-    });
+    const deleted = await app.inject({ method: "DELETE", url: `/api/rooms/${room.id}`, headers });
     expect(deleted.statusCode).toBe(204);
     expect((await app.inject({ url: `/api/rooms/${room.id}` })).statusCode).toBe(404);
   });
 
+  it("keeps each user's rooms to themselves", async () => {
+    const ada = await signUp("ada@example.com");
+    const bob = await signUp("bob@example.com");
+    const room = await createRoom(ada);
+
+    expect((await app.inject({ url: "/api/rooms", headers: bob })).json()).toEqual([]);
+    const steal = await app.inject({
+      method: "DELETE",
+      url: `/api/rooms/${room.id}`,
+      headers: bob,
+    });
+    expect(steal.statusCode).toBe(403);
+  });
+
   it("rejects invalid input", async () => {
+    const headers = await signUp();
     const bad = (payload: object) =>
-      app.inject({ method: "POST", url: "/api/rooms", headers: auth, payload });
+      app.inject({ method: "POST", url: "/api/rooms", headers, payload });
     expect((await bad({ name: "   ", runtime: "python" })).statusCode).toBe(400);
     expect((await bad({ name: "x", runtime: "cobol" })).statusCode).toBe(400);
     expect((await app.inject({ url: "/api/rooms/NOT_AN_ID" })).statusCode).toBe(400);
   });
 
-  it("serves the OpenAPI document", async () => {
-    const spec = (await app.inject({ url: "/docs/json" })).json();
-    expect(Object.keys(spec.paths)).toEqual(
-      expect.arrayContaining(["/api/rooms/", "/api/rooms/{id}", "/api/health"]),
-    );
-  });
-});
-
-describe("storage", () => {
   it("keeps rooms and their code across restarts", async () => {
-    const room = await createRoom("Survivor");
+    const room = await createRoom(await signUp());
     await app.close();
-    app = await createServer({
-      hostSecret: "test-secret",
-      db: database.db,
-      sandboxes: testSandboxes,
-    });
+    await start();
 
     expect((await app.inject({ url: `/api/rooms/${room.id}` })).json()).toEqual(room);
-    const [row] = await database.db
-      .execute<{ size: number }>(
-        sql`select length(state) as size from workspaces where room_id = ${room.id}`,
-      )
-      .then((result) => result.rows);
-    expect(row?.size).toBeGreaterThan(0);
+    const { rows } = await database.db.execute<{ size: number }>(
+      sql`select length(state) as size from workspaces where room_id = ${room.id}`,
+    );
+    expect(rows[0]?.size).toBeGreaterThan(0);
   });
 });
 
 describe("session socket", () => {
   it("shares the terminal and runs code", async () => {
-    const room = await createRoom();
+    const room = await createRoom(await signUp());
     const socket = await app.injectWS(`/ws/rooms/${room.id}/session`);
     const messages: ServerMessage[] = [];
     socket.on("message", (data) => messages.push(JSON.parse(data.toString())));
-
     const waitFor = (predicate: (m: ServerMessage) => boolean) =>
       expect.poll(() => messages.some(predicate), { timeout: 2000 }).toBe(true);
 

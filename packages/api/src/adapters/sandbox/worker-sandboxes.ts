@@ -1,6 +1,7 @@
 import { WebSocket } from "ws";
 import {
   INTERNAL_AUTH_HEADER,
+  Listeners,
   type Runtime,
   type Reservation,
   type RoomId,
@@ -67,9 +68,9 @@ export class WorkerSandboxes implements Sandboxes {
 }
 
 class WorkerSession implements SandboxSession {
-  private outputListeners: ((data: string) => void)[] = [];
-  private statusListeners: ((status: RunStatus) => void)[] = [];
-  private lostListeners: (() => void)[] = [];
+  private readonly output = new Listeners<string>();
+  private readonly statusChanged = new Listeners<RunStatus>();
+  private readonly lost = new Listeners();
   private closing = false;
 
   constructor(
@@ -78,41 +79,25 @@ class WorkerSession implements SandboxSession {
   ) {
     socket.on("message", (raw: Buffer) => {
       const event = JSON.parse(raw.toString()) as WorkerEvent;
-      if (event.type === "output") this.outputListeners.forEach((l) => l(event.data));
-      else this.statusListeners.forEach((l) => l(event.status));
+      if (event.type === "output") this.output.emit(event.data);
+      else this.statusChanged.emit(event.status);
     });
     socket.on("close", () => {
       if (this.closing) return;
       void this.release();
-      this.lostListeners.forEach((l) => l());
+      this.lost.emit();
     });
   }
 
-  onOutput(listener: (data: string) => void) {
-    this.outputListeners.push(listener);
-  }
-  onStatus(listener: (status: RunStatus) => void) {
-    this.statusListeners.push(listener);
-  }
-  onLost(listener: () => void) {
-    this.lostListeners.push(listener);
-  }
+  onOutput = (listener: (data: string) => void) => void this.output.add(listener);
+  onStatus = (listener: (status: RunStatus) => void) => void this.statusChanged.add(listener);
+  onLost = (listener: () => void) => void this.lost.add(listener);
 
-  input(data: string) {
-    this.send({ type: "input", data });
-  }
-  resize(cols: number, rows: number) {
-    this.send({ type: "resize", cols, rows });
-  }
-  write(code: string) {
-    this.send({ type: "write", code });
-  }
-  run(code: string) {
-    this.send({ type: "run", code });
-  }
-  stop() {
-    this.send({ type: "stop" });
-  }
+  input = (data: string) => this.send({ type: "input", data });
+  resize = (cols: number, rows: number) => this.send({ type: "resize", cols, rows });
+  write = (code: string) => this.send({ type: "write", code });
+  run = (code: string) => this.send({ type: "run", code });
+  stop = () => this.send({ type: "stop" });
 
   async close() {
     this.closing = true;

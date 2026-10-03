@@ -8,7 +8,7 @@ const app = await createServer({
   sandboxUser: config.sandboxUser,
   workspace: config.workspace,
   writableDirs: config.writableDirs,
-  logger: config.production ? true : { transport: { target: "pino-pretty" } },
+  logger: config.logger,
 });
 
 // Hooks must be added before the server starts listening.

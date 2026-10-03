@@ -1,4 +1,4 @@
-import { customType, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { customType, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 const bytes = customType<{ data: Uint8Array; driverData: Buffer }>({
   dataType: () => "bytea",
@@ -6,12 +6,37 @@ const bytes = customType<{ data: Uint8Array; driverData: Buffer }>({
   fromDriver: (value) => new Uint8Array(value),
 });
 
-export const rooms = pgTable("rooms", {
-  id: text().primaryKey(),
-  name: text().notNull(),
-  runtime: text().notNull(),
+export const users = pgTable("users", {
+  id: uuid().primaryKey().defaultRandom(),
+  /** Always lowercase. */
+  email: text().notNull().unique(),
+  passwordHash: text().notNull(),
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 });
+
+/** Signed-in sessions, keyed by a hash of the token kept in the browser's cookie. */
+export const sessions = pgTable("sessions", {
+  tokenHash: text().primaryKey(),
+  userId: uuid()
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  expiresAt: timestamp({ withTimezone: true }).notNull(),
+  createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});
+
+export const rooms = pgTable(
+  "rooms",
+  {
+    id: text().primaryKey(),
+    ownerId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text().notNull(),
+    runtime: text().notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index().on(table.ownerId)],
+);
 
 /** A room's document, saved as its CRDT (Yjs) state. Deleted with the room. */
 export const workspaces = pgTable("workspaces", {

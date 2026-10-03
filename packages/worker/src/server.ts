@@ -36,8 +36,13 @@ export async function createServer(options: {
 
   app.get("/health", async () => ({ status: "ok" }));
 
-  app.get("/terminal", { websocket: true }, (socket) =>
-    openTerminal(socket, { runtime: options.runtime, workspace: options.workspace, user }),
+  app.get("/terminal", { websocket: true }, (socket, request) =>
+    openTerminal(socket, {
+      runtime: options.runtime,
+      workspace: options.workspace,
+      user,
+      log: (error) => request.log.warn({ err: error }, "terminal command failed"),
+    }),
   );
 
   app.post("/clean", async (_request, reply) => {

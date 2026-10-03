@@ -2,18 +2,28 @@ import type { Awareness } from "y-protocols/awareness";
 import type * as Y from "yjs";
 import type {
   CreateRoom,
-  Runtime,
+  Credentials,
   Participant,
   Room,
   RoomId,
   RunStatus,
+  Runtime,
   SandboxState,
+  User,
 } from "@pairbox/shared";
 
-/** Room management. Creating, listing and deleting require the host secret. */
+export interface AuthApi {
+  /** The signed-in user, or null. */
+  me(): Promise<User | null>;
+  signUp(credentials: Credentials): Promise<User>;
+  signIn(credentials: Credentials): Promise<User>;
+  signOut(): Promise<void>;
+}
+
+/** Room management. Listing, creating and deleting are for signed-in users and their rooms. */
 export interface RoomsApi {
-  unlock(secret: string): Promise<boolean>;
   list(): Promise<Room[]>;
+  /** Anyone can look a room up by id. Null when it doesn't exist. */
   get(id: RoomId): Promise<Room | null>;
   create(input: CreateRoom): Promise<Room>;
   remove(id: RoomId): Promise<void>;
@@ -46,6 +56,7 @@ export interface TerminalSession {
 }
 
 export interface Api {
+  auth: AuthApi;
   rooms: RoomsApi;
   /** Resolves once the room's current state has been received. */
   join(room: Room, me: Participant): Promise<RoomSession>;

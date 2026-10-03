@@ -1,32 +1,29 @@
-import { existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { z } from "zod";
+import { readEnv } from "@pairbox/shared";
 
-// Settings live in .env at the repo root (see .env.example). Real environment variables win.
-const envFile = fileURLToPath(new URL("../../../.env", import.meta.url));
-if (existsSync(envFile)) process.loadEnvFile(envFile);
-
-function required(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} is not set. Copy .env.example to .env at the repo root.`);
-  return value;
-}
-
-const production = process.env["NODE_ENV"] === "production";
-
-/** api settings, read from the environment. */
-export const config = {
-  host: required("API_HOST"),
-  port: Number(required("API_PORT")),
-  hostSecret: required("HOST_SECRET"),
-  internalSecret: required("INTERNAL_SECRET"),
-  databaseUrl: required("DATABASE_URL"),
-  poolUrl: required("POOL_URL"),
-  /** Optional: the app's public address, else the tunnel's (see .env.example). */
-  publicUrl: process.env["PUBLIC_URL"] || undefined,
-  tunnelStatusUrl: process.env["TUNNEL_STATUS_URL"] || undefined,
-  production,
-};
-
-if (production && config.hostSecret === "dev") {
-  throw new Error("HOST_SECRET is still the development default. Set a real secret.");
-}
+export const config = readEnv(
+  z
+    .object({
+      API_HOST: z.string(),
+      API_PORT: z.coerce.number().int(),
+      INTERNAL_SECRET: z.string(),
+      DATABASE_URL: z.string(),
+      POOL_URL: z.url(),
+      /** The app's public address for invite links; else the tunnel's, if one runs. */
+      PUBLIC_URL: z.url().optional(),
+      TUNNEL_STATUS_URL: z.url().optional(),
+      NODE_ENV: z.string().optional(),
+    })
+    .transform((env) => ({
+      host: env.API_HOST,
+      port: env.API_PORT,
+      internalSecret: env.INTERNAL_SECRET,
+      databaseUrl: env.DATABASE_URL,
+      poolUrl: env.POOL_URL,
+      publicUrl: env.PUBLIC_URL,
+      tunnelStatusUrl: env.TUNNEL_STATUS_URL,
+      production: env.NODE_ENV === "production",
+      logger: env.NODE_ENV === "production" ? true : { transport: { target: "pino-pretty" } },
+    })),
+  process.env,
+);

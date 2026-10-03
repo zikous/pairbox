@@ -65,20 +65,19 @@
     refreshPeople();
 
     runtime = session.runtime();
-    const stopLanguage = session.onRuntime((next) => (runtime = next));
-    const stopStatus = session.terminal.onStatus((next) => (status = next));
-    const stopSandbox = session.terminal.onSandbox((next) => (sandbox = next));
-    const stopDeleted = session.onDeleted(() => {
-      toast.error("The host deleted this room");
-      router.navigate("/");
-    });
+    const unsubscribe = [
+      session.onRuntime((next) => (runtime = next)),
+      session.terminal.onStatus((next) => (status = next)),
+      session.terminal.onSandbox((next) => (sandbox = next)),
+      session.onDeleted(() => {
+        toast.error("The owner deleted this room");
+        router.navigate("/");
+      }),
+    ];
 
     return () => {
       session.awareness.off("change", refreshPeople);
-      stopLanguage();
-      stopStatus();
-      stopSandbox();
-      stopDeleted();
+      unsubscribe.forEach((stop) => stop());
     };
   });
 

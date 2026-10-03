@@ -1,7 +1,7 @@
 import { normalizeRoomName, type Runtime, type Room, type RoomId } from "@pairbox/shared";
-import { InvalidInputError, RoomNotFoundError } from "./errors";
+import { InvalidInputError, NotRoomOwnerError, RoomNotFoundError } from "./errors";
 import type { RoomEvents } from "./events";
-import type { Collaboration, RoomRepository } from "./ports";
+import type { Collaboration, OwnedRoom, RoomRepository } from "./ports";
 import type { TerminalService } from "./terminals";
 
 const STARTER_CODE: Record<Runtime, string> = {
@@ -26,27 +26,29 @@ export class RoomService {
     private readonly events: RoomEvents,
   ) {}
 
-  async list(): Promise<Room[]> {
-    const rooms = await this.repository.list();
+  /** The user's rooms, newest first. */
+  async list(ownerId: string): Promise<Room[]> {
+    const rooms = await this.repository.listByOwner(ownerId);
     return rooms.toSorted((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
-  find(id: RoomId): Promise<Room | undefined> {
+  find(id: RoomId): Promise<OwnedRoom | undefined> {
     return this.repository.get(id);
   }
 
-  async get(id: RoomId): Promise<Room> {
+  async get(id: RoomId): Promise<OwnedRoom> {
     const room = await this.find(id);
     if (!room) throw new RoomNotFoundError(id);
     return room;
   }
 
-  async create(input: { name: string; runtime: Runtime }): Promise<Room> {
+  async create(ownerId: string, input: { name: string; runtime: Runtime }): Promise<Room> {
     const name = normalizeRoomName(input.name);
     if (!name) throw new InvalidInputError("Room name is empty or too long");
 
-    const room: Room = {
+    const room: OwnedRoom = {
       id: newRoomId(),
+      ownerId,
       name,
       runtime: input.runtime,
       createdAt: new Date().toISOString(),
@@ -56,8 +58,9 @@ export class RoomService {
     return room;
   }
 
-  async delete(id: RoomId): Promise<void> {
-    await this.get(id);
+  async delete(ownerId: string, id: RoomId): Promise<void> {
+    const room = await this.get(id);
+    if (room.ownerId !== ownerId) throw new NotRoomOwnerError();
     this.events.publish(id, { type: "room_deleted" });
     await this.terminals.close(id);
     this.collaboration.destroy(id);

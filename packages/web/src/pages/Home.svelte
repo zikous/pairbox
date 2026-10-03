@@ -1,28 +1,28 @@
 <script lang="ts">
-  import { Lock, Plus } from "@lucide/svelte";
+  import { Plus } from "@lucide/svelte";
   import type { Room } from "@pairbox/shared";
   import { toast } from "svelte-sonner";
   import { api } from "$lib/api";
   import Logo from "$lib/components/brand/Logo.svelte";
   import DeleteRoomDialog from "$lib/components/home/DeleteRoomDialog.svelte";
-  import HostUnlock from "$lib/components/home/HostUnlock.svelte";
   import JoinForm from "$lib/components/home/JoinForm.svelte";
   import NewRoomDialog from "$lib/components/home/NewRoomDialog.svelte";
   import RoomList from "$lib/components/home/RoomList.svelte";
-  import IconButton from "$lib/components/shared/IconButton.svelte";
   import ThemeMenu from "$lib/components/shared/ThemeMenu.svelte";
+  import UserMenu from "$lib/components/shared/UserMenu.svelte";
   import { Button } from "$lib/components/ui/button";
   import { errorMessage } from "$lib/format";
-  import { prefs } from "$lib/prefs.svelte";
+  import { auth } from "$lib/auth.svelte";
 
   let rooms = $state<Room[]>();
   let newRoomOpen = $state(false);
   let deleteOpen = $state(false);
   let roomToDelete = $state<Room>();
 
-  // Load the host's rooms once host access is unlocked.
+  // Load your rooms once we know you're signed in.
   $effect(() => {
-    if (!prefs.hostSecret) return;
+    rooms = undefined;
+    if (!auth.user) return;
     api.rooms.list().then(
       (list) => (rooms = list),
       (error) => toast.error("Couldn't load your rooms", { description: errorMessage(error) }),
@@ -44,7 +44,10 @@
 
   <header class="relative mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
     <Logo />
-    <ThemeMenu />
+    <div class="flex items-center gap-1">
+      <UserMenu />
+      <ThemeMenu />
+    </div>
   </header>
 
   <main class="relative mx-auto max-w-3xl px-4 pt-14 pb-20">
@@ -61,24 +64,30 @@
     <section class="mt-16">
       <div class="mb-3 flex items-center justify-between gap-4">
         <h2 class="label-mono">
-          Your rooms{prefs.hostSecret && rooms ? ` · ${rooms.length}` : ""}
+          Your rooms{auth.user && rooms ? ` · ${rooms.length}` : ""}
         </h2>
-        {#if prefs.hostSecret}
-          <div class="flex items-center gap-1">
-            <IconButton label="Lock host access" onclick={() => (prefs.hostSecret = "")}>
-              <Lock />
-            </IconButton>
-            <Button size="sm" variant="outline" onclick={() => (newRoomOpen = true)}>
-              <Plus /> New room
-            </Button>
-          </div>
+        {#if auth.user}
+          <Button size="sm" variant="outline" onclick={() => (newRoomOpen = true)}>
+            <Plus /> New room
+          </Button>
         {/if}
       </div>
 
-      {#if prefs.hostSecret}
+      {#if auth.user}
         <RoomList {rooms} oncreate={() => (newRoomOpen = true)} ondelete={askDelete} />
-      {:else}
-        <HostUnlock />
+      {:else if auth.user === null}
+        <div
+          class="bg-card flex flex-wrap items-center justify-between gap-4 rounded-lg border p-5"
+        >
+          <div>
+            <p class="font-medium">Host your own rooms</p>
+            <p class="text-muted-foreground text-sm">Sign in to create rooms and invite people.</p>
+          </div>
+          <div class="flex gap-2">
+            <Button href="/signin" variant="outline" size="sm">Sign in</Button>
+            <Button href="/signup" size="sm">Create account</Button>
+          </div>
+        </div>
       {/if}
     </section>
   </main>

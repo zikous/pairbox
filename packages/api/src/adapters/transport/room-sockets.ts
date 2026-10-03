@@ -3,6 +3,7 @@ import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import {
   CLOSE_ROOM_NOT_FOUND,
   ClientMessageSchema,
+  parseJson,
   RoomIdSchema,
   type ClientMessage,
   type RoomId,
@@ -50,7 +51,7 @@ export const roomSockets: FastifyPluginAsyncZod<Deps> = async (app, deps) => {
       let leave = () => {};
       socket.on("close", () => leave());
       socket.on("message", (raw: Buffer) => {
-        const parsed = ClientMessageSchema.safeParse(safeJson(raw.toString()));
+        const parsed = ClientMessageSchema.safeParse(parseJson(raw.toString()));
         if (!parsed.success) return;
         void ready
           .then((joined) => joined && handle(parsed.data))
@@ -102,11 +103,3 @@ export const roomSockets: FastifyPluginAsyncZod<Deps> = async (app, deps) => {
     },
   );
 };
-
-function safeJson(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
-  }
-}

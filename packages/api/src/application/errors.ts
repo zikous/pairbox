@@ -5,3 +5,21 @@ export class RoomNotFoundError extends Error {
 }
 
 export class InvalidInputError extends Error {}
+
+export class EmailTakenError extends Error {
+  constructor() {
+    super("An account with this email already exists");
+  }
+}
+
+export class InvalidCredentialsError extends Error {
+  constructor() {
+    super("Wrong email or password");
+  }
+}
+
+export class NotRoomOwnerError extends Error {
+  constructor() {
+    super("Only the room's owner can do this");
+  }
+}
